@@ -67,7 +67,7 @@ export function AuthProvider({ children }) {
       ...(options.headers || {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     };
-    return fetch(url, { ...options, headers });
+    return fetch(url, { cache: 'no-store', ...options, headers });
   };
 
   return (

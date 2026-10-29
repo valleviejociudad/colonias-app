@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'colonias.sqlite');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'colonias.sqlite');
 
 let dbInstance = null;
 

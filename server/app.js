@@ -14,6 +14,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'valle_viejo_colonias_secret_2025';
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  next();
+});
 
 // Auth Middleware
 function authMiddleware(req, res, next) {

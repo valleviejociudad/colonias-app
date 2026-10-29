@@ -50,7 +50,7 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '20px 14px',
+        padding: 'calc(20px + env(safe-area-inset-top, 0px)) 14px calc(20px + env(safe-area-inset-bottom, 0px))',
         background: 'linear-gradient(145deg, var(--md-sys-color-primary-container) 0%, var(--md-sys-color-background) 55%, var(--md-sys-color-secondary-container) 100%)'
       }}
     >
