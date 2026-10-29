@@ -3,7 +3,8 @@ const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon.svg',\n  '/icon-192.png'
+  '/icon.svg',
+  '/icon-192.png'
 ];
 
 self.addEventListener('install', (event) => {
