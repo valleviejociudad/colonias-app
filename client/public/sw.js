@@ -1,4 +1,4 @@
-const CACHE_NAME = 'colonias-vv-v13';
+const CACHE_NAME = 'colonias-vv-v14';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

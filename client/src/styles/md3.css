@@ -513,15 +513,18 @@ h1, h2, h3, h4, .font-display {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 74px;
-  background: rgba(255, 255, 255, 0.96);
+  height: auto;
+  min-height: calc(64px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid var(--md-sys-color-outline-variant);
   z-index: 50;
   justify-content: space-around;
   align-items: center;
-  padding: 6px 8px env(safe-area-inset-bottom, 6px);
+  padding: 8px 8px calc(10px + env(safe-area-inset-bottom, 0px));
   box-shadow: 0 -2px 12px rgba(0, 30, 48, 0.08);
+  transform: translateZ(0);
 }
 
 .bottom-nav-item {
@@ -652,11 +655,15 @@ h1, h2, h3, h4, .font-display {
   .app-bottom-nav {
     display: none !important;
   }
+  .app-shell,
   .app-main-content,
   .app-main-scroll {
     padding: 0 !important;
     margin: 0 !important;
     max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
   .ficha-scroll-wrapper {
     overflow: visible !important;
@@ -785,9 +792,35 @@ h1, h2, h3, h4, .font-display {
 }
 
 @media (max-width: 900px) {
-  .app-main-content { margin: 0 !important; padding: 54px 0 0 !important; }
-  .app-main-scroll { padding: 14px 14px 156px; }
-  .app-top-bar { left: 0; height: 54px; padding: 0 14px; }
+  .app-shell {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+  .app-main-content {
+    margin: 0 !important;
+    padding: 54px 0 0 !important;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .app-main-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding: 14px 14px calc(156px + env(safe-area-inset-bottom, 0px));
+  }
+  .app-top-bar {
+    left: 0;
+    height: 54px;
+    padding: 0 14px;
+    justify-content: center;
+  }
   .app-status-bar { display: none; }
   .hero-banner { border-radius: 20px; padding: 16px; }
   .mobile-fab {
@@ -796,7 +829,7 @@ h1, h2, h3, h4, .font-display {
     gap: 8px;
     position: fixed;
     right: 16px;
-    bottom: 88px;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     height: 50px;
     padding: 0 18px;
     border-radius: 16px;

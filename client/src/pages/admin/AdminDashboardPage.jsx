@@ -344,9 +344,12 @@ export default function AdminDashboardPage() {
       {/* ==================== MAIN CONTENT AREA ==================== */}
       <div className="app-main-content">
         {/* Top App Bar */}
-        <header className="app-top-bar no-print">
-          {/* Logos institucionales — izquierda */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <header
+          className="app-top-bar no-print"
+          style={isMobileView ? { justifyContent: 'center' } : undefined}
+        >
+          {/* Logos institucionales — centrados en mobile, izquierda en desktop */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
             <img
               src="/logodeporte.png"
               alt="Deporte Valle Viejo"
