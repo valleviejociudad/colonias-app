@@ -186,7 +186,37 @@ async function initDatabase() {
       created_at TEXT DEFAULT (datetime('now', 'localtime')),
       FOREIGN KEY (colonia_id) REFERENCES colonias(id)
     );
+
+    CREATE TABLE IF NOT EXISTS albumes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL,
+      descripcion TEXT,
+      colonia_id INTEGER,
+      creado_por INTEGER,
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      FOREIGN KEY (colonia_id) REFERENCES colonias(id) ON DELETE SET NULL,
+      FOREIGN KEY (creado_por) REFERENCES usuarios(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS imagenes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      public_id TEXT NOT NULL UNIQUE,
+      album_id INTEGER,
+      colonia_id INTEGER,
+      titulo TEXT,
+      descripcion TEXT,
+      ancho INTEGER,
+      alto INTEGER,
+      bytes INTEGER,
+      formato TEXT,
+      subido_por INTEGER,
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      FOREIGN KEY (album_id) REFERENCES albumes(id) ON DELETE SET NULL,
+      FOREIGN KEY (colonia_id) REFERENCES colonias(id) ON DELETE SET NULL,
+      FOREIGN KEY (subido_por) REFERENCES usuarios(id) ON DELETE SET NULL
+    );
   `);
+  saveDatabase();
 
   // Seed default users if empty
   const userCount = queryOne('SELECT COUNT(*) as count FROM usuarios');

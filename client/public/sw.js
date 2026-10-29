@@ -1,4 +1,4 @@
-const CACHE_NAME = 'colonias-vv-v1';
+const CACHE_NAME = 'colonias-vv-v11';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -26,6 +26,11 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  const reqUrl = new URL(event.request.url);
+  if (reqUrl.pathname.startsWith('/api/galeria') || reqUrl.hostname.includes('cloudinary.com')) {
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)

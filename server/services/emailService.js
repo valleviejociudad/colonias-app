@@ -62,7 +62,7 @@ async function enviarEmailSuspension({ destinatarios, titulo, mensaje, coloniaNo
                 <p style="margin: 0; color: #333; font-size: 15px; line-height: 1.5;">${mensaje}</p>
               </div>
               <p style="color: #555; font-size: 14px;">
-                Estimado/a <strong>${dest.apellido_nombre || 'Padre/Madre/Tutor'}</strong>, le enviamos este comunicado oficial respecto a la sede <strong>${coloniaNombre || 'Todas las sedes'}</strong>.
+                Estimado/a <strong>${dest.apellido_nombre || 'Padre/Madre/Tutor'}</strong>, le enviamos este comunicado oficial respecto a la localidad <strong>${coloniaNombre || 'Todas las localidades'}</strong>.
               </p>
               <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
               <p style="font-size: 12px; color: #888; text-align: center; margin: 0;">

@@ -21,6 +21,10 @@ Plataforma Web + PWA (Android & iOS) para la inscripción pública y gestión de
    - Publica un banner de alerta en tiempo real en toda la plataforma.
    - Envía **correos electrónicos (Email) automáticos** a los padres inscriptos.
    - Genera el listado de envío directo por **WhatsApp (`wa.me`)** sin requerir Meta API.
+6. **Banco de Imágenes Privado (Cloudinary):**
+   - Acceso exclusivo para personal autorizado logueado (`/admin` → pestaña **Banco de Imágenes**).
+   - Subida múltiple directa firmada al navegador (con progreso real, arrastrar y soltar, organización por **Álbum** y **Localidad**, y visor Lightbox).
+   - Almacenamiento privado (`type: authenticated`) en la carpeta `colonias-galeria/` con URLs firmadas desde el backend.
 
 ---
 
@@ -45,3 +49,12 @@ El proyecto ya incluye `railway.json` configurado:
 1. Subí este repositorio a GitHub.
 2. En **Railway**, seleccioná **"New Project" -> "Deploy from GitHub repo"**.
 3. Railway ejecutará automáticamente `npm run install:all && npm run build` y levantará el servidor unificado con `npm start`.
+4. Configurá las variables de entorno en `.env` (local) y en la pestaña **Variables** de Railway para habilitar el **Banco de Imágenes** con Cloudinary:
+
+```env
+CLOUDINARY_CLOUD_NAME=tu_cloud_name
+CLOUDINARY_API_KEY=tu_api_key
+CLOUDINARY_API_SECRET=tu_api_secret
+```
+
+> Nota: Si las variables de Cloudinary no están configuradas, la plataforma sigue funcionando normalmente y los endpoints `/api/galeria` responden `503`.

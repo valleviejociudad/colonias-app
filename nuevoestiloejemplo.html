@@ -1,0 +1,467 @@
+<!DOCTYPE html><html class="h-full bg-slate-50" lang="es" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Fichas Médicas Digitales - Colonias de Verano | Municipalidad de Valle Viejo</title>
+<!-- Google Fonts: Roboto & Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&amp;family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS v3 with forms and container-queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script data-purpose="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Roboto', 'sans-serif'],
+          },
+          colors: {
+            // Material You MD3 Institutional Palette (Teal / Cyan / Slate)
+            md: {
+              primary: '#00677D',
+              'on-primary': '#FFFFFF',
+              'primary-container': '#B7ECFF',
+              'on-primary-container': '#001F27',
+              secondary: '#4C616B',
+              'on-secondary': '#FFFFFF',
+              'secondary-container': '#CFE6F1',
+              'on-secondary-container': '#071E26',
+              surface: '#FAFDFD',
+              'surface-dim': '#D7DADB',
+              'surface-container-low': '#F2F5F6',
+              'surface-container': '#ECEFEF',
+              'surface-container-high': '#E6E9EA',
+              'surface-variant': '#DBE4E8',
+              'on-surface': '#191C1D',
+              'on-surface-variant': '#3F484B',
+              outline: '#70797C',
+              'outline-variant': '#BFC8CC',
+              error: '#BA1A1A',
+              'error-container': '#FFDAD6',
+              'on-error-container': '#410002',
+              warning: '#795900',
+              'warning-container': '#FFDEA2',
+              'on-warning-container': '#261900',
+              success: '#006C47',
+              'success-container': '#88F7BA',
+              'on-success-container': '#002113',
+            }
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="md3-symbols">
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    .material-symbols-outlined.fill {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+  </style>
+<style data-purpose="scroll-custom">
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #BFC8CC;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="h-full flex overflow-hidden text-md-on-surface font-sans antialiased bg-[#F4F7F8]">
+<!-- BEGIN: NavigationDrawer -->
+<!-- Persistent MD3 Navigation Drawer for institutional portal -->
+<aside class="w-72 bg-white flex flex-col flex-shrink-0 border-r border-md-outline-variant/40 shadow-sm z-20" data-purpose="main-navigation">
+<!-- Header with Municipality & Program Identity -->
+<div class="p-5 flex items-center gap-3.5 border-b border-slate-100">
+<div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-600 to-teal-500 text-white flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-2xl fill">pool</span>
+</div>
+<div>
+<h1 class="text-base font-bold text-slate-800 leading-tight tracking-tight">Colonias de Verano</h1>
+<p class="text-xs text-slate-500 font-medium leading-none mt-0.5">Municipalidad de Valle Viejo</p>
+</div>
+</div>
+<!-- Navigation List (MD3 standard pills) -->
+<nav aria-label="Navegación principal" class="p-3 flex-1 overflow-y-auto space-y-1">
+<!-- Active Item: Fichas Médicas -->
+<a class="flex items-center gap-3.5 px-4 py-3 rounded-full bg-md-primary-container text-md-on-primary-container font-semibold text-sm transition-all shadow-sm" href="#">
+<span class="material-symbols-outlined fill text-md-on-primary-container text-xl">clinical_notes</span>
+<span class="">Fichas Médicas</span>
+</a>
+<!-- Item: Resumen -->
+<a class="flex items-center gap-3.5 px-4 py-3 rounded-full text-md-on-surface-variant hover:bg-slate-100 transition-colors text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-xl">dashboard</span>
+<span class="">Resumen</span>
+</a>
+<!-- Item: Colonias / Sedes -->
+<a class="flex items-center gap-3.5 px-4 py-3 rounded-full text-md-on-surface-variant hover:bg-slate-100 transition-colors text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-xl">location_city</span>
+<span class="">Colonias / Sedes</span>
+</a>
+<!-- Item: Clima & Alertas -->
+<a class="flex items-center gap-3.5 px-4 py-3 rounded-full text-md-on-surface-variant hover:bg-slate-100 transition-colors text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-xl">cloud_queue</span>
+<span class="">Clima &amp; Alertas</span>
+</a>
+<div class="pt-3 pb-1 px-4">
+<div class="h-px bg-slate-200 w-full"></div>
+</div>
+<!-- External action: Ver Formulario Padres -->
+<a class="flex items-center gap-3.5 px-4 py-3 rounded-full text-md-primary hover:bg-md-primary-container/30 transition-colors text-sm font-medium group" href="#" rel="noopener noreferrer" target="_blank">
+<span class="material-symbols-outlined text-xl group-hover:scale-105 transition-transform">open_in_new</span>
+<span class="">Ver Formulario Padres</span>
+</a>
+</nav>
+<!-- Bottom User/Role Profile Container -->
+<div class="p-3.5 border-t border-slate-100 bg-slate-50/70">
+<div class="flex items-center justify-between p-2 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+<div class="flex items-center gap-2.5 overflow-hidden">
+<div class="w-9 h-9 rounded-full bg-slate-200 text-slate-700 font-semibold text-xs flex items-center justify-center flex-shrink-0">
+            AD
+          </div>
+<div class="truncate">
+<p class="text-xs font-bold text-slate-800 truncate leading-tight">Subsecretaría de Deportes</p>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">ADMIN</span>
+</div>
+</div>
+<button class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-rose-50 rounded-lg transition-colors" title="Cerrar sesión" type="button">
+<span class="material-symbols-outlined text-lg">logout</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- END: NavigationDrawer -->
+<!-- BEGIN: MainContentArea -->
+<div class="flex-1 flex flex-col h-full overflow-hidden">
+<!-- BEGIN: TopAppBar -->
+<header class="h-16 bg-white border-b border-md-outline-variant/40 px-6 flex items-center justify-between flex-shrink-0 z-10" data-purpose="top-app-bar">
+<!-- Title & Branding -->
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2 text-md-primary">
+<span class="material-symbols-outlined text-2xl">sports_volleyball</span>
+<span class="font-extrabold tracking-wide uppercase text-sm">Deporte</span>
+</div>
+<span class="h-4 w-px bg-slate-200"></span>
+<span class="text-xs font-medium text-slate-500 hidden sm:inline">Temporada 2027</span>
+</div>
+<!-- Institutional Valle Viejo Ciudad Badge -->
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-200/70 shadow-2xs">
+<div class="w-6 h-6 rounded bg-sky-600 flex items-center justify-center text-white text-[11px] font-black">
+            VV
+          </div>
+<div class="text-right">
+<span class="text-[11px] font-extrabold uppercase tracking-tight text-slate-800 block leading-3">VALLE VIEJO</span>
+<span class="text-[9px] uppercase tracking-widest text-sky-700 font-semibold block leading-3">CIUDAD</span>
+</div>
+</div>
+</div>
+</header>
+<!-- END: TopAppBar -->
+<!-- BEGIN: ScrollablePageContent -->
+<main class="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
+<!-- BEGIN: HeroSearchBanner -->
+<!-- MD3 Surface Container with Gradient & Elevated Action Header -->
+<section class="bg-gradient-to-r from-[#00677D] to-[#004D5E] rounded-3xl p-6 md:p-7 text-white shadow-md" data-purpose="search-and-header-section">
+<!-- Header row with title & FAB -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+<div class="flex items-center gap-3">
+<h2 class="text-2xl font-bold tracking-tight">Fichas Médicas Digitales</h2>
+<span class="px-2.5 py-1 bg-white/20 text-white text-xs font-semibold rounded-full backdrop-blur-sm">
+              3 registradas
+            </span>
+</div>
+<!-- MD3 Extended Action Button (+ Cargar Nueva Ficha) -->
+<button class="inline-flex items-center justify-center gap-2 bg-white text-md-primary font-bold text-sm px-5 py-2.5 rounded-full shadow-sm hover:bg-slate-100 active:scale-95 transition-all" type="button">
+<span class="material-symbols-outlined text-lg">add</span>
+<span class="">Cargar Nueva Ficha</span>
+</button>
+</div>
+<!-- MD3 Docked Search Bar -->
+<div class="relative w-full mb-4">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+<span class="material-symbols-outlined text-xl">search</span>
+</div>
+<input class="w-full bg-white text-slate-800 text-sm font-normal rounded-full pl-11 pr-11 py-3.5 border-none shadow-sm focus:ring-2 focus:ring-cyan-300 placeholder:text-slate-400 transition" placeholder="Buscar rápido por Nombre del Niño/a, DNI, Apellido del Tutor o N° de Ficha..." type="text">
+<button class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600" title="Limpiar búsqueda" type="button">
+<span class="material-symbols-outlined text-lg">tune</span>
+</button>
+</div>
+<!-- MD3 Filter Chips Horizontal Row -->
+<div class="flex flex-wrap items-center gap-2 pt-1" data-purpose="filter-chips">
+<!-- Chip 1 -->
+<button class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium bg-white/15 text-white hover:bg-white/25 active:bg-white/30 backdrop-blur-sm border border-white/20 transition-all" type="button">
+<span class="material-symbols-outlined text-sm">groups</span>
+<span class="">Todas las Sedes (4)</span>
+</button>
+<!-- Chip 2 Active / Selected -->
+<button class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-md-primary shadow-sm transition-all" type="button">
+<span class="material-symbols-outlined text-sm fill">check</span>
+<span class="">Predio de UTHGRA</span>
+</button>
+<!-- Chip 3 -->
+<button class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium bg-white/15 text-white hover:bg-white/25 border border-white/20 backdrop-blur-sm transition-all" type="button">
+<span class="">SUM de Las Tejas</span>
+</button>
+<!-- Chip 4 (Warning / Medical Alert filter) -->
+<button class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-400 text-amber-950 hover:bg-amber-300 active:scale-95 transition shadow-sm ml-auto" type="button">
+<span class="material-symbols-outlined text-sm fill">warning</span>
+<span class="">Con Alergias / Patologías</span>
+</button>
+</div>
+</section>
+<!-- END: HeroSearchBanner -->
+<!-- BEGIN: MedicalCardsGrid -->
+<section class="space-y-4" data-purpose="cards-container">
+<div class="flex items-center justify-between text-xs text-slate-500 px-1 font-medium">
+<span class="">Mostrando 3 expedientes médicos activos</span>
+<span class="flex items-center gap-1 text-slate-600"><span class="material-symbols-outlined text-sm">filter_list</span> Orden: Más recientes</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- CARD 1: Esteban Junior -->
+<article class="bg-white rounded-2xl border-l-4 border-l-rose-500 border-t border-r border-b border-slate-200 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden" data-purpose="medical-card">
+<div class="p-5 space-y-3.5">
+<!-- Meta Header Badge + Sede -->
+<div class="flex items-center justify-between text-xs">
+<span class="font-mono font-semibold px-2 py-0.5 rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200">
+                  VV-2025-0004
+                </span>
+<span class="text-slate-500 font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">pin_drop</span> Predio de UTHGRA
+                </span>
+</div>
+<!-- Persona Title & General Details -->
+<div>
+<h3 class="text-lg font-bold text-slate-900 leading-snug">Esteban Junior</h3>
+<div class="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-600">
+<span class=""><strong>DNI:</strong> 41326915</span>
+<span class="text-slate-300">•</span>
+<span class=""><strong>Edad:</strong> 17 años</span>
+<span class="text-slate-300">•</span>
+<span class=""><strong>O. Social:</strong> No</span>
+</div>
+</div>
+<!-- MD3 Medical Alert Container (Tonal Warning / Error) -->
+<div class="p-3 bg-red-50/90 rounded-xl border border-red-200 text-xs space-y-1">
+<div class="flex items-center gap-1.5 text-red-700 font-bold tracking-tight">
+<span class="material-symbols-outlined text-base fill">report</span>
+<span class="">ALERTA MÉDICA:</span>
+</div>
+<ul class="text-red-900 space-y-0.5 pl-5 list-disc font-normal">
+<li class=""><strong>Discapacidad:</strong> Intelectual</li>
+</ul>
+</div>
+<!-- Tutor and Emergency Contact Info -->
+<div class="pt-1 border-t border-slate-100 text-xs space-y-1">
+<div class="text-slate-600">
+<span class="font-medium text-slate-500">Tutor (Padre):</span> Esteban Guzzo
+                </div>
+<div class="text-rose-700 font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">emergency</span>
+<span class="">Urgencia: 3834711120</span>
+</div>
+</div>
+</div>
+<!-- MD3 Action Footer -->
+<div class="p-4 bg-slate-50/70 border-t border-slate-100 space-y-2">
+<div class="grid grid-cols-2 gap-2">
+<!-- Direct Call -->
+<a class="inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold transition active:scale-95 shadow-2xs" href="tel:3834711120">
+<span class="material-symbols-outlined text-base">call</span>
+<span class="">Llamar</span>
+</a>
+<!-- WhatsApp -->
+<a class="inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition active:scale-95 shadow-2xs" href="https://wa.me/5493834711120" rel="noopener noreferrer" target="_blank">
+<span class="material-symbols-outlined text-base">chat</span>
+<span class="">WhatsApp</span>
+</a>
+</div>
+<!-- Main PDF View & Secondary Icon Buttons -->
+<div class="flex items-center gap-1.5 pt-0.5">
+<button class="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-md-primary hover:bg-[#005566] text-white rounded-xl text-xs font-medium transition active:scale-98" type="button">
+<span class="material-symbols-outlined text-base">description</span>
+<span class="">Ver Ficha / PDF</span>
+</button>
+<button class="p-2 bg-slate-200/80 hover:bg-slate-300 text-slate-700 rounded-xl transition" title="Editar Ficha" type="button">
+<span class="material-symbols-outlined text-base">edit</span>
+</button>
+<button class="p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl transition" title="Eliminar Ficha" type="button">
+<span class="material-symbols-outlined text-base">delete</span>
+</button>
+</div>
+</div>
+</article>
+<!-- CARD 2: Aragón, Sofía Valentina -->
+<article class="bg-white rounded-2xl border-l-4 border-l-rose-500 border-t border-r border-b border-slate-200 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden" data-purpose="medical-card">
+<div class="p-5 space-y-3.5">
+<!-- Meta Header Badge + Sede -->
+<div class="flex items-center justify-between text-xs">
+<span class="font-mono font-semibold px-2 py-0.5 rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200">
+                  VV-2025-0002
+                </span>
+<span class="text-slate-500 font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">pin_drop</span> Predio de UTHGRA
+                </span>
+</div>
+<!-- Persona Title & General Details -->
+<div>
+<h3 class="text-lg font-bold text-slate-900 leading-snug">Aragón, Sofía Valentina</h3>
+<div class="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-600">
+<span class=""><strong>DNI:</strong> 56890123</span>
+<span class="text-slate-300">•</span>
+<span class=""><strong>Edad:</strong> 7 años</span>
+<span class="text-slate-300">•</span>
+<span class=""><strong>O. Social:</strong> Swiss Medical</span>
+</div>
+</div>
+<!-- MD3 Medical Alert Container -->
+<div class="p-3 bg-red-50/90 rounded-xl border border-red-200 text-xs space-y-1.5">
+<div class="flex items-center gap-1.5 text-red-700 font-bold tracking-tight">
+<span class="material-symbols-outlined text-base fill">report</span>
+<span class="">ALERTA MÉDICA:</span>
+</div>
+<ul class="text-red-900 space-y-1 pl-5 list-disc font-normal leading-relaxed">
+<li class=""><strong>Oftalmológica:</strong> Astigmatismo leve (usa lentes recetados fuera de la pileta)</li>
+<li class=""><strong>Celiaquía:</strong> Intolerancia al gluten diagnosticada - requiere colación Sin TACC</li>
+</ul>
+</div>
+<!-- Tutor and Emergency Contact Info -->
+<div class="pt-1 border-t border-slate-100 text-xs space-y-1">
+<div class="text-slate-600">
+<span class="font-medium text-slate-500">Tutor (Padre):</span> Aragón, Jorge Luis
+                </div>
+<div class="text-rose-700 font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">emergency</span>
+<span class="">Urgencia: Silvina Roldán (Tía) - 3834711223</span>
+</div>
+</div>
+</div>
+<!-- MD3 Action Footer -->
+<div class="p-4 bg-slate-50/70 border-t border-slate-100 space-y-2">
+<div class="grid grid-cols-2 gap-2">
+<a class="inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold transition active:scale-95 shadow-2xs" href="tel:3834711223">
+<span class="material-symbols-outlined text-base">call</span>
+<span class="">Llamar</span>
+</a>
+<a class="inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition active:scale-95 shadow-2xs" href="https://wa.me/5493834711223" rel="noopener noreferrer" target="_blank">
+<span class="material-symbols-outlined text-base">chat</span>
+<span class="">WhatsApp</span>
+</a>
+</div>
+<div class="flex items-center gap-1.5 pt-0.5">
+<button class="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-md-primary hover:bg-[#005566] text-white rounded-xl text-xs font-medium transition active:scale-98" type="button">
+<span class="material-symbols-outlined text-base">description</span>
+<span class="">Ver Ficha / PDF</span>
+</button>
+<button class="p-2 bg-slate-200/80 hover:bg-slate-300 text-slate-700 rounded-xl transition" title="Editar Ficha" type="button">
+<span class="material-symbols-outlined text-base">edit</span>
+</button>
+<button class="p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl transition" title="Eliminar Ficha" type="button">
+<span class="material-symbols-outlined text-base">delete</span>
+</button>
+</div>
+</div>
+</article>
+<!-- CARD 3: Gómez Bazán, Mateo Benjamín -->
+<article class="bg-white rounded-2xl border-l-4 border-l-rose-500 border-t border-r border-b border-slate-200 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden" data-purpose="medical-card">
+<div class="p-5 space-y-3.5">
+<!-- Meta Header Badge + Sede -->
+<div class="flex items-center justify-between text-xs">
+<span class="font-mono font-semibold px-2 py-0.5 rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200">
+                  VV-2025-0001
+                </span>
+<span class="text-slate-500 font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">pin_drop</span> Predio de UTHGRA
+                </span>
+</div>
+<!-- Persona Title & General Details -->
+<div>
+<h3 class="text-lg font-bold text-slate-900 leading-snug">Gómez Bazán, Mateo Benjamín</h3>
+<div class="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-600">
+<span class=""><strong>DNI:</strong> 54123890</span>
+<span class="text-slate-300">•</span>
+<span class=""><strong>Edad:</strong> 9 años</span>
+<span class="text-slate-300">•</span>
+<span class=""><strong>O. Social:</strong> OSEP Catamarca</span>
+</div>
+</div>
+<!-- MD3 Medical Alert Container -->
+<div class="p-3 bg-red-50/90 rounded-xl border border-red-200 text-xs space-y-1.5">
+<div class="flex items-center gap-1.5 text-red-700 font-bold tracking-tight">
+<span class="material-symbols-outlined text-base fill">report</span>
+<span class="">ALERTA MÉDICA:</span>
+</div>
+<ul class="text-red-900 space-y-1 pl-5 list-disc font-normal leading-relaxed">
+<li class=""><strong>Alergia:</strong> Alergia a la picadura de hormiga colorada y amoxicilina (lleva corticoide oral en mochila)</li>
+<li class=""><strong>Asma:</strong> Broncoespasmo leve estacional (usa Salbutamol inhalador si presenta sibilancias)</li>
+</ul>
+</div>
+<!-- Tutor and Emergency Contact Info -->
+<div class="pt-1 border-t border-slate-100 text-xs space-y-1">
+<div class="text-slate-600">
+<span class="font-medium text-slate-500">Tutor (Madre):</span> Bazán, María Elena
+                </div>
+<div class="text-rose-700 font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">emergency</span>
+<span class="">Urgencia: Carlos Gómez (Padre) - 3834598765</span>
+</div>
+</div>
+</div>
+<!-- MD3 Action Footer -->
+<div class="p-4 bg-slate-50/70 border-t border-slate-100 space-y-2">
+<div class="grid grid-cols-2 gap-2">
+<a class="inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold transition active:scale-95 shadow-2xs" href="tel:3834598765">
+<span class="material-symbols-outlined text-base">call</span>
+<span class="">Llamar</span>
+</a>
+<a class="inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition active:scale-95 shadow-2xs" href="https://wa.me/5493834598765" rel="noopener noreferrer" target="_blank">
+<span class="material-symbols-outlined text-base">chat</span>
+<span class="">WhatsApp</span>
+</a>
+</div>
+<div class="flex items-center gap-1.5 pt-0.5">
+<button class="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-md-primary hover:bg-[#005566] text-white rounded-xl text-xs font-medium transition active:scale-98" type="button">
+<span class="material-symbols-outlined text-base">description</span>
+<span class="">Ver Ficha / PDF</span>
+</button>
+<button class="p-2 bg-slate-200/80 hover:bg-slate-300 text-slate-700 rounded-xl transition" title="Editar Ficha" type="button">
+<span class="material-symbols-outlined text-base">edit</span>
+</button>
+<button class="p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl transition" title="Eliminar Ficha" type="button">
+<span class="material-symbols-outlined text-base">delete</span>
+</button>
+</div>
+</div>
+</article>
+</div>
+</section>
+<!-- END: MedicalCardsGrid -->
+</main>
+<!-- END: ScrollablePageContent -->
+<!-- BEGIN: QuickProtocolBanner -->
+<!-- Institutional footer banner with rapid medical emergency line -->
+<footer class="h-10 bg-white border-t border-slate-200 px-6 flex items-center justify-between text-xs text-slate-500" data-purpose="status-bar">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+
+</div>
+<div class="flex items-center gap-4 text-[11px]">
+
+
+</div>
+</footer>
+<!-- END: QuickProtocolBanner -->
+</div>
+<!-- END: MainContentArea -->
+
+
+</body></html>

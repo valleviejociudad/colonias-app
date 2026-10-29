@@ -388,7 +388,7 @@ export default function FormularioInscripcionPage() {
             className="gf-card"
           >
             <div className="gf-card-section-bar">
-              <MapPin size={15} /> 1. Verificación por DNI y Selección de Sede
+              <MapPin size={15} /> 1. Verificación por DNI y Selección de Localidad
             </div>
 
             <div className="md3-field">
@@ -479,7 +479,7 @@ export default function FormularioInscripcionPage() {
 
             <div className="md3-field" style={{ marginBottom: 0 }}>
               <label className="md3-label">
-                ¿En qué Colonia / Sede de Valle Viejo desea inscribirlo? <span className="md3-required">*</span>
+                ¿En qué Colonia / Localidad de Valle Viejo desea inscribirlo? <span className="md3-required">*</span>
               </label>
               <div style={{ display: 'grid', gap: '10px', marginTop: '6px' }}>
                 {colonias.map((col) => {
@@ -528,7 +528,7 @@ export default function FormularioInscripcionPage() {
                         </div>
                         {col.suspendida === 1 && (
                           <div style={{ fontSize: '0.8rem', color: '#b45309', fontWeight: 700, marginTop: '4px' }}>
-                            ⚠️ Sede con aviso climático activo: {col.motivo_suspension}
+                            ⚠️ Localidad con aviso climático activo: {col.motivo_suspension}
                           </div>
                         )}
                       </div>

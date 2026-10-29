@@ -74,7 +74,7 @@ export default function AlertaClimaticaBanner({ refreshTrigger = 0 }) {
                       borderRadius: '999px'
                     }}
                   >
-                    {alerta.colonia_nombre || 'Todas las Sedes'}
+                    {alerta.colonia_nombre || 'Todas las Localidades'}
                   </span>
                   <strong style={{ color: '#78350f', fontSize: '0.96rem' }}>{alerta.titulo}</strong>
                 </div>

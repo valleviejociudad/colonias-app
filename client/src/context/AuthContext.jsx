@@ -61,8 +61,9 @@ export function AuthProvider({ children }) {
   };
 
   const authFetch = async (url, options = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const headers = {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(options.headers || {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     };

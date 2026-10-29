@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { initDatabase, getDb } = require('./config/database');
 const { enviarEmailSuspension } = require('./services/emailService');
+const cloudinaryService = require('./services/cloudinaryService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -623,7 +624,7 @@ app.post('/api/alertas', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Título y mensaje son obligatorios' });
   }
 
-  let coloniaNombre = 'Todas las Sedes Municipales';
+  let coloniaNombre = 'Todas las Localidades Municipales';
   if (colonia_id) {
     const col = queryOne('SELECT * FROM colonias WHERE id = ?', [colonia_id]);
     if (col) coloniaNombre = col.nombre;
@@ -663,7 +664,7 @@ app.post('/api/alertas', authMiddleware, async (req, res) => {
   const whatsappLinks = padres.map(p => {
     const num = String(p.whatsapp || p.telefono || '').replace(/\D/g, '');
     const phone = num.startsWith('54') ? num : `549${num}`;
-    const texto = `⚠️ *COLONIAS DE VERANO - MUNICIPALIDAD DE VALLE VIEJO*\n\nHola *${p.apellido_nombre}* (tutor de *${p.nino_nombre}*):\n\n*${titulo}*\n${mensaje}\n\n📍 Sede: *${p.colonia_nombre || coloniaNombre}*`;
+    const texto = `⚠️ *COLONIAS DE VERANO - MUNICIPALIDAD DE VALLE VIEJO*\n\nHola *${p.apellido_nombre}* (tutor de *${p.nino_nombre}*):\n\n*${titulo}*\n${mensaje}\n\n📍 Localidad: *${p.colonia_nombre || coloniaNombre}*`;
     return {
       padre_nombre: p.apellido_nombre,
       nino_nombre: p.nino_nombre,
@@ -748,6 +749,471 @@ app.get('/api/estadisticas', authMiddleware, (req, res) => {
     alertasActivas,
     porColonia
   });
+});
+
+// ==================== GALERÍA ====================
+
+const firmaRateLimitMap = new Map();
+
+function sanitizeText(value, maxLen) {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, maxLen);
+}
+
+function parseOptionalInt(value) {
+  if (value === null || value === undefined || value === '' || value === 'todas' || value === 'todos') {
+    return null;
+  }
+  const n = Number.parseInt(String(value), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function isReadOnlyRole(user) {
+  const rol = String(user?.rol || '').toLowerCase();
+  return rol === 'lectura' || rol === 'readonly' || rol === 'solo_lectura';
+}
+
+function canManageResource(user, ownerId) {
+  if (!user) return false;
+  if (user.rol === 'admin') return true;
+  if (ownerId !== null && ownerId !== undefined && Number(ownerId) === Number(user.id)) return true;
+  return false;
+}
+
+function checkGaleriaConfigured(res) {
+  if (!cloudinaryService.isConfigured()) {
+    res.status(503).json({ error: 'Galería no configurada' });
+    return false;
+  }
+  return true;
+}
+
+function enrichImagenRow(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    thumb_url: cloudinaryService.getSignedUrl(row.public_id, {
+      transformation: [
+        { width: 520, height: 520, crop: 'fill', gravity: 'auto', quality: 'auto', fetch_format: 'auto' }
+      ]
+    }),
+    full_url: cloudinaryService.getSignedUrl(row.public_id, {
+      transformation: [
+        { width: 2000, height: 2000, crop: 'limit', quality: 'auto', fetch_format: 'auto' }
+      ]
+    }),
+    download_url: cloudinaryService.getDownloadUrl(row.public_id, row.formato || 'jpg')
+  };
+}
+
+app.post('/api/galeria/firma', authMiddleware, (req, res) => {
+  if (isReadOnlyRole(req.user)) {
+    return res.status(403).json({ error: 'Tu rol no tiene permisos para subir imágenes' });
+  }
+
+  // Rate-limit básico por usuario (máx. 60 firmas por minuto)
+  const now = Date.now();
+  const key = String(req.user.id || req.ip);
+  const bucket = firmaRateLimitMap.get(key) || { count: 0, resetAt: now + 60000 };
+  if (now > bucket.resetAt) {
+    bucket.count = 0;
+    bucket.resetAt = now + 60000;
+  }
+  bucket.count += 1;
+  firmaRateLimitMap.set(key, bucket);
+  if (bucket.count > 60) {
+    return res.status(429).json({ error: 'Demasiadas solicitudes de subida. Intentá nuevamente en un minuto.' });
+  }
+
+  if (!checkGaleriaConfigured(res)) return;
+
+  try {
+    const signed = cloudinaryService.signUpload({ folder: cloudinaryService.GALLERY_FOLDER });
+    res.json(signed);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || 'No se pudo generar la firma de subida' });
+  }
+});
+
+// --- CRUD de Álbumes (registrado ANTES de /api/galeria/:id) ---
+
+app.get('/api/galeria/albumes', authMiddleware, (req, res) => {
+  if (!checkGaleriaConfigured(res)) return;
+
+  const { queryAll } = getDb();
+  const coloniaId = parseOptionalInt(req.query.colonia_id);
+
+  const params = [];
+  let whereSql = '';
+  if (coloniaId) {
+    whereSql = 'WHERE a.colonia_id = ?';
+    params.push(coloniaId);
+  }
+
+  const albumes = queryAll(
+    `SELECT a.*,
+       c.nombre as colonia_nombre,
+       u.nombre as creador_nombre,
+       (SELECT COUNT(*) FROM imagenes im WHERE im.album_id = a.id) as total_imagenes
+     FROM albumes a
+     LEFT JOIN colonias c ON c.id = a.colonia_id
+     LEFT JOIN usuarios u ON u.id = a.creado_por
+     ${whereSql}
+     ORDER BY a.id DESC`,
+    params
+  );
+
+  res.json(albumes);
+});
+
+app.post('/api/galeria/albumes', authMiddleware, (req, res) => {
+  if (isReadOnlyRole(req.user)) {
+    return res.status(403).json({ error: 'Tu rol no tiene permisos para crear álbumes' });
+  }
+  if (!checkGaleriaConfigured(res)) return;
+
+  const { queryOne, runQuery } = getDb();
+  const nombre = sanitizeText(req.body?.nombre, 120);
+  const descripcion = sanitizeText(req.body?.descripcion, 500);
+  const coloniaId = parseOptionalInt(req.body?.colonia_id);
+
+  if (!nombre) {
+    return res.status(400).json({ error: 'El nombre del álbum es obligatorio' });
+  }
+
+  if (coloniaId) {
+    const col = queryOne('SELECT id FROM colonias WHERE id = ?', [coloniaId]);
+    if (!col) {
+      return res.status(400).json({ error: 'La localidad seleccionada no existe' });
+    }
+  }
+
+  const result = runQuery(
+    'INSERT INTO albumes (nombre, descripcion, colonia_id, creado_por) VALUES (?, ?, ?, ?)',
+    [nombre, descripcion || null, coloniaId, req.user.id]
+  );
+
+  const nuevo = queryOne(
+    `SELECT a.*,
+       c.nombre as colonia_nombre,
+       u.nombre as creador_nombre,
+       0 as total_imagenes
+     FROM albumes a
+     LEFT JOIN colonias c ON c.id = a.colonia_id
+     LEFT JOIN usuarios u ON u.id = a.creado_por
+     WHERE a.id = ?`,
+    [result.lastInsertRowid]
+  );
+
+  res.status(201).json(nuevo);
+});
+
+app.put('/api/galeria/albumes/:id', authMiddleware, (req, res) => {
+  if (!checkGaleriaConfigured(res)) return;
+
+  const albumId = parseOptionalInt(req.params.id);
+  if (!albumId) {
+    return res.status(400).json({ error: 'Identificador de álbum inválido' });
+  }
+
+  const { queryOne, runQuery } = getDb();
+  const album = queryOne('SELECT * FROM albumes WHERE id = ?', [albumId]);
+  if (!album) {
+    return res.status(404).json({ error: 'Álbum no encontrado' });
+  }
+
+  if (!canManageResource(req.user, album.creado_por)) {
+    return res.status(403).json({ error: 'No tenés permisos para editar este álbum' });
+  }
+
+  const nombre = sanitizeText(req.body?.nombre ?? album.nombre, 120);
+  const descripcion =
+    req.body?.descripcion !== undefined ? sanitizeText(req.body.descripcion, 500) : album.descripcion;
+  const coloniaId =
+    req.body?.colonia_id !== undefined ? parseOptionalInt(req.body.colonia_id) : album.colonia_id;
+
+  if (!nombre) {
+    return res.status(400).json({ error: 'El nombre del álbum es obligatorio' });
+  }
+
+  runQuery(
+    'UPDATE albumes SET nombre = ?, descripcion = ?, colonia_id = ? WHERE id = ?',
+    [nombre, descripcion || null, coloniaId, albumId]
+  );
+
+  const actualizado = queryOne(
+    `SELECT a.*,
+       c.nombre as colonia_nombre,
+       u.nombre as creador_nombre,
+       (SELECT COUNT(*) FROM imagenes im WHERE im.album_id = a.id) as total_imagenes
+     FROM albumes a
+     LEFT JOIN colonias c ON c.id = a.colonia_id
+     LEFT JOIN usuarios u ON u.id = a.creado_por
+     WHERE a.id = ?`,
+    [albumId]
+  );
+
+  res.json(actualizado);
+});
+
+app.delete('/api/galeria/albumes/:id', authMiddleware, (req, res) => {
+  if (!checkGaleriaConfigured(res)) return;
+
+  const albumId = parseOptionalInt(req.params.id);
+  if (!albumId) {
+    return res.status(400).json({ error: 'Identificador de álbum inválido' });
+  }
+
+  const { queryOne, runQuery } = getDb();
+  const album = queryOne('SELECT * FROM albumes WHERE id = ?', [albumId]);
+  if (!album) {
+    return res.status(404).json({ error: 'Álbum no encontrado' });
+  }
+
+  if (!canManageResource(req.user, album.creado_por)) {
+    return res.status(403).json({ error: 'No tenés permisos para eliminar este álbum' });
+  }
+
+  // Las fotos del álbum conservan su registro quedando con album_id = NULL
+  runQuery('UPDATE imagenes SET album_id = NULL WHERE album_id = ?', [albumId]);
+  runQuery('DELETE FROM albumes WHERE id = ?', [albumId]);
+
+  res.json({ ok: true });
+});
+
+// --- Imágenes del Banco de Imágenes ---
+
+app.post('/api/galeria', authMiddleware, async (req, res) => {
+  if (isReadOnlyRole(req.user)) {
+    return res.status(403).json({ error: 'Tu rol no tiene permisos para registrar imágenes' });
+  }
+
+  const rawPublicId = typeof req.body?.public_id === 'string' ? req.body.public_id.trim() : '';
+  const validPrefix = `${cloudinaryService.GALLERY_FOLDER}/`;
+  if (
+    !rawPublicId ||
+    rawPublicId.length > 255 ||
+    !rawPublicId.startsWith(validPrefix) ||
+    rawPublicId.includes('..') ||
+    !/^colonias-galeria\/[a-zA-Z0-9_\-/]+$/.test(rawPublicId)
+  ) {
+    return res.status(400).json({ error: 'El identificador de la imagen no pertenece a la carpeta autorizada' });
+  }
+
+  if (!checkGaleriaConfigured(res)) return;
+
+  const { queryOne, runQuery } = getDb();
+
+  const existente = queryOne('SELECT id FROM imagenes WHERE public_id = ?', [rawPublicId]);
+  if (existente) {
+    return res.status(409).json({ error: 'La imagen ya se encuentra registrada en el banco' });
+  }
+
+  let cloudResource;
+  try {
+    cloudResource = await cloudinaryService.verifyResource(rawPublicId);
+  } catch (err) {
+    const code = err?.error?.http_code || err?.http_code;
+    if (code === 404) {
+      return res.status(400).json({ error: 'La imagen no existe en Cloudinary o no es un recurso autenticado válido' });
+    }
+    return res.status(502).json({ error: 'No se pudo verificar la imagen en Cloudinary' });
+  }
+
+  const titulo = sanitizeText(req.body?.titulo, 150);
+  const descripcion = sanitizeText(req.body?.descripcion, 600);
+  let albumId = parseOptionalInt(req.body?.album_id);
+  let coloniaId = parseOptionalInt(req.body?.colonia_id);
+
+  if (albumId) {
+    const album = queryOne('SELECT id, colonia_id FROM albumes WHERE id = ?', [albumId]);
+    if (!album) {
+      albumId = null;
+    } else if (!coloniaId && album.colonia_id) {
+      coloniaId = album.colonia_id;
+    }
+  }
+
+  if (coloniaId) {
+    const col = queryOne('SELECT id FROM colonias WHERE id = ?', [coloniaId]);
+    if (!col) coloniaId = null;
+  }
+
+  const ancho = Number.parseInt(cloudResource?.width ?? req.body?.width, 10) || null;
+  const alto = Number.parseInt(cloudResource?.height ?? req.body?.height, 10) || null;
+  const bytes = Number.parseInt(cloudResource?.bytes ?? req.body?.bytes, 10) || null;
+  const formato = sanitizeText(cloudResource?.format ?? req.body?.format, 16).toLowerCase() || null;
+
+  const insertRes = runQuery(
+    `INSERT INTO imagenes (
+      public_id, album_id, colonia_id, titulo, descripcion, ancho, alto, bytes, formato, subido_por
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      rawPublicId,
+      albumId,
+      coloniaId,
+      titulo || null,
+      descripcion || null,
+      ancho,
+      alto,
+      bytes,
+      formato,
+      req.user.id
+    ]
+  );
+
+  const creada = queryOne(
+    `SELECT im.*,
+       a.nombre as album_nombre,
+       c.nombre as colonia_nombre,
+       u.nombre as autor_nombre
+     FROM imagenes im
+     LEFT JOIN albumes a ON a.id = im.album_id
+     LEFT JOIN colonias c ON c.id = im.colonia_id
+     LEFT JOIN usuarios u ON u.id = im.subido_por
+     WHERE im.id = ?`,
+    [insertRes.lastInsertRowid]
+  );
+
+  res.status(201).json(enrichImagenRow(creada));
+});
+
+app.get('/api/galeria', authMiddleware, (req, res) => {
+  if (!checkGaleriaConfigured(res)) return;
+
+  const { queryAll, queryOne } = getDb();
+
+  const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
+  const rawLimit = Number.parseInt(String(req.query.limit || '24'), 10) || 24;
+  const limit = Math.min(60, Math.max(1, rawLimit));
+  const offset = (page - 1) * limit;
+
+  const conditions = [];
+  const params = [];
+
+  if (req.query.album_id === 'sin_album') {
+    conditions.push('im.album_id IS NULL');
+  } else {
+    const albumId = parseOptionalInt(req.query.album_id);
+    if (albumId) {
+      conditions.push('im.album_id = ?');
+      params.push(albumId);
+    }
+  }
+
+  const coloniaId = parseOptionalInt(req.query.colonia_id);
+  if (coloniaId) {
+    conditions.push('im.colonia_id = ?');
+    params.push(coloniaId);
+  }
+
+  const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const totalRow = queryOne(`SELECT COUNT(*) as total FROM imagenes im ${whereSql}`, params);
+  const total = totalRow?.total || 0;
+
+  const rows = queryAll(
+    `SELECT im.*,
+       a.nombre as album_nombre,
+       c.nombre as colonia_nombre,
+       u.nombre as autor_nombre
+     FROM imagenes im
+     LEFT JOIN albumes a ON a.id = im.album_id
+     LEFT JOIN colonias c ON c.id = im.colonia_id
+     LEFT JOIN usuarios u ON u.id = im.subido_por
+     ${whereSql}
+     ORDER BY im.id DESC
+     LIMIT ? OFFSET ?`,
+    [...params, limit, offset]
+  );
+
+  const items = rows.map(enrichImagenRow);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  res.json({
+    items,
+    total,
+    page,
+    limit,
+    totalPages,
+    hasMore: page < totalPages
+  });
+});
+
+app.put('/api/galeria/:id', authMiddleware, (req, res) => {
+  if (!checkGaleriaConfigured(res)) return;
+
+  const imgId = parseOptionalInt(req.params.id);
+  if (!imgId) {
+    return res.status(400).json({ error: 'Identificador de imagen inválido' });
+  }
+
+  const { queryOne, runQuery } = getDb();
+  const img = queryOne('SELECT * FROM imagenes WHERE id = ?', [imgId]);
+  if (!img) {
+    return res.status(404).json({ error: 'Imagen no encontrada' });
+  }
+
+  if (!canManageResource(req.user, img.subido_por)) {
+    return res.status(403).json({ error: 'No tenés permisos para editar esta imagen' });
+  }
+
+  const titulo =
+    req.body?.titulo !== undefined ? sanitizeText(req.body.titulo, 150) : img.titulo;
+  const descripcion =
+    req.body?.descripcion !== undefined ? sanitizeText(req.body.descripcion, 600) : img.descripcion;
+  const albumId =
+    req.body?.album_id !== undefined ? parseOptionalInt(req.body.album_id) : img.album_id;
+  const coloniaId =
+    req.body?.colonia_id !== undefined ? parseOptionalInt(req.body.colonia_id) : img.colonia_id;
+
+  runQuery(
+    'UPDATE imagenes SET titulo = ?, descripcion = ?, album_id = ?, colonia_id = ? WHERE id = ?',
+    [titulo || null, descripcion || null, albumId, coloniaId, imgId]
+  );
+
+  const actualizada = queryOne(
+    `SELECT im.*,
+       a.nombre as album_nombre,
+       c.nombre as colonia_nombre,
+       u.nombre as autor_nombre
+     FROM imagenes im
+     LEFT JOIN albumes a ON a.id = im.album_id
+     LEFT JOIN colonias c ON c.id = im.colonia_id
+     LEFT JOIN usuarios u ON u.id = im.subido_por
+     WHERE im.id = ?`,
+    [imgId]
+  );
+
+  res.json(enrichImagenRow(actualizada));
+});
+
+app.delete('/api/galeria/:id', authMiddleware, async (req, res) => {
+  if (!checkGaleriaConfigured(res)) return;
+
+  const imgId = parseOptionalInt(req.params.id);
+  if (!imgId) {
+    return res.status(400).json({ error: 'Identificador de imagen inválido' });
+  }
+
+  const { queryOne, runQuery } = getDb();
+  const img = queryOne('SELECT * FROM imagenes WHERE id = ?', [imgId]);
+  if (!img) {
+    return res.status(404).json({ error: 'Imagen no encontrada' });
+  }
+
+  if (!canManageResource(req.user, img.subido_por)) {
+    return res.status(403).json({ error: 'No tenés permisos para eliminar esta imagen' });
+  }
+
+  try {
+    await cloudinaryService.destroy(img.public_id);
+  } catch (err) {
+    return res.status(502).json({ error: 'No se pudo eliminar el archivo en Cloudinary' });
+  }
+
+  runQuery('DELETE FROM imagenes WHERE id = ?', [imgId]);
+  res.json({ ok: true });
 });
 
 // Serve frontend in production (for Railway deployment)

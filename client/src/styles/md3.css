@@ -1,57 +1,226 @@
 :root {
-  /* Material Design 3 Color Tokens - Deportes Valle Viejo Theme */
+  /* ============================================================
+   * Material Design 3 Color Tokens - Deportes Valle Viejo Theme
+   * Estos tokens alimentan tanto tu CSS custom como los
+   * componentes oficiales de @material/web (Web Components)
+   * ============================================================ */
+
+  /* --- Sys: Primary (Azul institucional Valle Viejo) --- */
   --md-sys-color-primary: #006494;
   --md-sys-color-on-primary: #ffffff;
   --md-sys-color-primary-container: #cbe6ff;
   --md-sys-color-on-primary-container: #001e30;
+  --md-sys-color-inverse-primary: #8dcff3;
 
+  /* --- Sys: Secondary (Celeste deportivo) --- */
   --md-sys-color-secondary: #0082a8;
   --md-sys-color-on-secondary: #ffffff;
   --md-sys-color-secondary-container: #b8eaff;
   --md-sys-color-on-secondary-container: #001f2a;
 
+  /* --- Sys: Tertiary (Verde salud) --- */
   --md-sys-color-tertiary: #006c4c;
   --md-sys-color-on-tertiary: #ffffff;
   --md-sys-color-tertiary-container: #89f8c7;
   --md-sys-color-on-tertiary-container: #002114;
 
+  /* --- Sys: Error --- */
   --md-sys-color-error: #ba1a1a;
   --md-sys-color-on-error: #ffffff;
   --md-sys-color-error-container: #ffdad6;
   --md-sys-color-on-error-container: #410002;
 
+  /* --- Sys: Warning (custom, no estándar MD3) --- */
   --md-sys-color-warning: #b25e00;
   --md-sys-color-warning-container: #ffddb8;
   --md-sys-color-on-warning-container: #2b1700;
 
+  /* --- Sys: Background & Surface --- */
   --md-sys-color-background: #f4f8fc;
   --md-sys-color-on-background: #181c20;
-  --md-sys-color-surface: #ffffff;
+  --md-sys-color-surface: #f8fbff;
+  --md-sys-color-on-surface: #181c20;
+  --md-sys-color-surface-variant: #dce4ec;
+  --md-sys-color-on-surface-variant: #41484d;
   --md-sys-color-surface-dim: #d8e0e8;
+  --md-sys-color-surface-bright: #f8fbff;
   --md-sys-color-surface-container-lowest: #ffffff;
   --md-sys-color-surface-container-low: #eff4f9;
   --md-sys-color-surface-container: #e9eff5;
   --md-sys-color-surface-container-high: #e3e9ef;
   --md-sys-color-surface-container-highest: #dde3ea;
-  --md-sys-color-on-surface: #181c20;
-  --md-sys-color-on-surface-variant: #41484d;
+  --md-sys-color-inverse-surface: #2d3135;
+  --md-sys-color-inverse-on-surface: #eef1f5;
+
+  /* --- Sys: Outline --- */
   --md-sys-color-outline: #71787e;
   --md-sys-color-outline-variant: #c1c7ce;
 
-  /* Material Design 3 Elevation & Shape Tokens */
+  /* --- Sys: Shadow & Scrim --- */
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+
+  /* ============================================================
+   * @material/web component token overrides
+   * Aplican el tema a los Web Components MD3 de Google
+   * ============================================================ */
+
+  /* md-filled-button */
+  --md-filled-button-container-color: var(--md-sys-color-primary);
+  --md-filled-button-label-text-color: var(--md-sys-color-on-primary);
+  --md-filled-button-container-shape: 9999px;
+  --md-filled-button-label-text-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-filled-button-label-text-weight: 600;
+
+  /* md-outlined-button */
+  --md-outlined-button-label-text-color: var(--md-sys-color-primary);
+  --md-outlined-button-outline-color: var(--md-sys-color-outline-variant);
+  --md-outlined-button-container-shape: 9999px;
+  --md-outlined-button-label-text-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-outlined-button-label-text-weight: 600;
+
+  /* md-text-button */
+  --md-text-button-label-text-color: var(--md-sys-color-primary);
+  --md-text-button-container-shape: 9999px;
+  --md-text-button-label-text-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-text-button-label-text-weight: 600;
+
+  /* md-filled-tonal-button */
+  --md-filled-tonal-button-container-color: var(--md-sys-color-primary-container);
+  --md-filled-tonal-button-label-text-color: var(--md-sys-color-on-primary-container);
+  --md-filled-tonal-button-container-shape: 9999px;
+  --md-filled-tonal-button-label-text-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-filled-tonal-button-label-text-weight: 600;
+
+  /* md-outlined-text-field */
+  --md-outlined-text-field-focus-outline-color: var(--md-sys-color-primary);
+  --md-outlined-text-field-label-text-color: var(--md-sys-color-on-surface-variant);
+  --md-outlined-text-field-focus-label-text-color: var(--md-sys-color-primary);
+  --md-outlined-text-field-outline-color: var(--md-sys-color-outline-variant);
+  --md-outlined-text-field-container-shape: 12px;
+  --md-outlined-text-field-input-text-font: 'Roboto', sans-serif;
+
+  /* md-filled-text-field */
+  --md-filled-text-field-focus-active-indicator-color: var(--md-sys-color-primary);
+  --md-filled-text-field-label-text-color: var(--md-sys-color-on-surface-variant);
+  --md-filled-text-field-focus-label-text-color: var(--md-sys-color-primary);
+  --md-filled-text-field-container-color: var(--md-sys-color-surface-container-low);
+  --md-filled-text-field-container-shape: 12px 12px 0 0;
+  --md-filled-text-field-input-text-font: 'Roboto', sans-serif;
+
+  /* md-outlined-select */
+  --md-outlined-select-focus-outline-color: var(--md-sys-color-primary);
+  --md-outlined-select-label-text-color: var(--md-sys-color-on-surface-variant);
+  --md-outlined-select-focus-label-text-color: var(--md-sys-color-primary);
+  --md-outlined-select-outline-color: var(--md-sys-color-outline-variant);
+  --md-outlined-select-container-shape: 12px;
+  --md-outlined-select-text-field-input-text-font: 'Roboto', sans-serif;
+
+  /* md-checkbox */
+  --md-checkbox-selected-container-color: var(--md-sys-color-primary);
+  --md-checkbox-selected-focus-container-color: var(--md-sys-color-primary);
+  --md-checkbox-selected-hover-container-color: var(--md-sys-color-primary);
+  --md-checkbox-selected-pressed-container-color: var(--md-sys-color-primary);
+  --md-checkbox-selected-icon-color: var(--md-sys-color-on-primary);
+  --md-checkbox-outline-color: var(--md-sys-color-outline);
+
+  /* md-radio */
+  --md-radio-selected-icon-color: var(--md-sys-color-primary);
+  --md-radio-selected-focus-icon-color: var(--md-sys-color-primary);
+  --md-radio-selected-hover-icon-color: var(--md-sys-color-primary);
+  --md-radio-unselected-outline-color: var(--md-sys-color-outline);
+
+  /* md-switch */
+  --md-switch-selected-track-color: var(--md-sys-color-primary);
+  --md-switch-selected-handle-color: var(--md-sys-color-on-primary);
+  --md-switch-selected-focus-track-color: var(--md-sys-color-primary);
+  --md-switch-selected-hover-track-color: var(--md-sys-color-primary);
+  --md-switch-selected-pressed-track-color: var(--md-sys-color-primary);
+
+  /* md-filter-chip */
+  --md-filter-chip-selected-container-color: var(--md-sys-color-secondary-container);
+  --md-filter-chip-selected-label-text-color: var(--md-sys-color-on-secondary-container);
+  --md-filter-chip-container-shape: 9999px;
+  --md-filter-chip-label-text-font: 'Roboto', sans-serif;
+  --md-filter-chip-label-text-weight: 600;
+
+  /* md-assist-chip & md-suggestion-chip */
+  --md-assist-chip-container-shape: 9999px;
+  --md-suggestion-chip-container-shape: 9999px;
+
+  /* md-circular-progress */
+  --md-circular-progress-active-indicator-color: var(--md-sys-color-primary);
+
+  /* md-linear-progress */
+  --md-linear-progress-active-indicator-color: var(--md-sys-color-primary);
+  --md-linear-progress-track-color: var(--md-sys-color-surface-container-high);
+
+  /* md-dialog */
+  --md-dialog-container-color: var(--md-sys-color-surface-container-high);
+  --md-dialog-container-shape: 28px;
+
+  /* md-fab */
+  --md-fab-container-color: var(--md-sys-color-primary-container);
+  --md-fab-icon-color: var(--md-sys-color-on-primary-container);
+  --md-fab-container-shape: 16px;
+
+  /* md-primary-tab / md-secondary-tab */
+  --md-primary-tab-active-indicator-color: var(--md-sys-color-primary);
+  --md-primary-tab-active-label-text-color: var(--md-sys-color-primary);
+  --md-secondary-tab-active-indicator-color: var(--md-sys-color-primary);
+
+  /* Material Design 3 Elevation Shadows */
+  --md-sys-elevation-1: 0 1px 3px 1px rgba(0, 30, 48, 0.07), 0 1px 2px 0 rgba(0, 30, 48, 0.12);
+  --md-sys-elevation-2: 0 2px 6px 2px rgba(0, 30, 48, 0.09), 0 1px 2px 0 rgba(0, 30, 48, 0.14);
+  --md-sys-elevation-3: 0 6px 16px 4px rgba(0, 30, 48, 0.11), 0 2px 4px 0 rgba(0, 30, 48, 0.14);
+
+  /* Material Design 3 Shape Tokens */
+  --md-sys-shape-corner-extra-small: 4px;
   --md-sys-shape-corner-small: 8px;
   --md-sys-shape-corner-medium: 12px;
   --md-sys-shape-corner-large: 16px;
   --md-sys-shape-corner-extra-large: 28px;
   --md-sys-shape-corner-full: 9999px;
 
-  --md-sys-elevation-1: 0 1px 3px 1px rgba(0, 30, 48, 0.07), 0 1px 2px 0 rgba(0, 30, 48, 0.12);
-  --md-sys-elevation-2: 0 2px 6px 2px rgba(0, 30, 48, 0.09), 0 1px 2px 0 rgba(0, 30, 48, 0.14);
-  --md-sys-elevation-3: 0 6px 16px 4px rgba(0, 30, 48, 0.11), 0 2px 4px 0 rgba(0, 30, 48, 0.14);
-
   /* Material Design 3 Motion Easing */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-sys-motion-duration-short1: 50ms;
+  --md-sys-motion-duration-short2: 100ms;
+  --md-sys-motion-duration-short3: 150ms;
+  --md-sys-motion-duration-short4: 200ms;
+  --md-sys-motion-duration-medium1: 250ms;
+  --md-sys-motion-duration-medium2: 300ms;
+  --md-sys-motion-duration-medium3: 350ms;
+  --md-sys-motion-duration-medium4: 400ms;
+  --md-sys-motion-duration-long1: 450ms;
+  --md-sys-motion-duration-long2: 500ms;
+
+  /* Aliases de compatibilidad (usan motion easing legacy) */
   --md-easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --md-easing-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
+
+  /* Material Design 3 Typescale tokens */
+  --md-sys-typescale-display-large-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-sys-typescale-display-medium-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-sys-typescale-display-small-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-sys-typescale-headline-large-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-sys-typescale-headline-medium-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-sys-typescale-headline-small-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-sys-typescale-title-large-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-sys-typescale-body-large-font: 'Roboto', sans-serif;
+  --md-sys-typescale-body-medium-font: 'Roboto', sans-serif;
+  --md-sys-typescale-body-small-font: 'Roboto', sans-serif;
+  --md-sys-typescale-label-large-font: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+  --md-sys-typescale-label-medium-font: 'Roboto', sans-serif;
+  --md-sys-typescale-label-small-font: 'Roboto', sans-serif;
+}
+
+/* ============================================================
+ * Material Symbols — font para <md-icon> de @material/web
+ * ============================================================ */
+:root {
+  --md-icon-font: 'Material Symbols Rounded';
 }
 
 * {
@@ -61,12 +230,36 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Tamaño full-width para los Web Components de formulario */
+md-outlined-text-field,
+md-filled-text-field,
+md-outlined-select,
+md-filled-select {
+  display: block;
+  width: 100%;
+}
+
+md-filled-button,
+md-outlined-button,
+md-text-button,
+md-filled-tonal-button,
+md-elevated-button {
+  font-family: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+}
+
+/* Asegura que los md-chip-set no rompan el layout */
+md-chip-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 html, body {
   font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--md-sys-color-background);
   color: var(--md-sys-color-on-background);
   line-height: 1.5;
-  overflow-x: hidden;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -296,9 +489,12 @@ h1, h2, h3, h4, .font-display {
   display: flex;
   flex-direction: column;
   padding: 20px 14px;
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  bottom: 0;
   height: 100vh;
+  height: 100dvh;
   z-index: 30;
 }
 
@@ -456,7 +652,8 @@ h1, h2, h3, h4, .font-display {
   .app-bottom-nav {
     display: none !important;
   }
-  .app-main-content {
+  .app-main-content,
+  .app-main-scroll {
     padding: 0 !important;
     margin: 0 !important;
     max-width: 100% !important;
@@ -472,5 +669,148 @@ h1, h2, h3, h4, .font-display {
     padding: 12px 16px !important;
     width: 100% !important;
     max-width: 100% !important;
+  }
+}
+
+
+/* ============================================================
+ * Drawer de navegación, top bar, hero, tarjetas médicas, stats
+ * (clases usadas por AdminDashboardPage / FichaMedicaVerticalView)
+ * ============================================================ */
+.app-main-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 58px 0 40px !important;
+  max-width: none !important;
+  margin: 0 0 0 265px !important;
+}
+.app-main-scroll { flex: 1; padding: 20px 28px 28px; width: 100%; max-width: 1440px; margin: 0 auto; box-sizing: border-box; }
+
+.app-nav-header { display: flex; align-items: center; padding: 4px 8px 18px; }
+.app-nav-list { display: flex; flex-direction: column; gap: 4px; flex: 1; overflow-y: auto; }
+.app-nav-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box;
+  padding: 12px 16px; border: none; border-radius: 999px; background: transparent;
+  color: var(--md-sys-color-on-surface-variant); font: inherit; font-weight: 600; font-size: 0.92rem;
+  text-align: left; text-decoration: none; cursor: pointer; transition: background-color .2s ease, color .2s ease;
+}
+.app-nav-item:hover { background: var(--md-sys-color-surface-container); }
+.app-nav-item.active { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); font-weight: 700; }
+.app-nav-item .nav-icon { flex-shrink: 0; }
+.app-nav-divider { height: 1px; background: var(--md-sys-color-outline-variant); margin: 8px 12px; }
+.app-nav-footer { border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.app-nav-user-card { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; }
+.app-nav-avatar {
+  width: 36px; height: 36px; border-radius: 999px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); font-weight: 800; font-size: 0.8rem;
+}
+.role-badge {
+  display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container);
+}
+
+.app-top-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  height: 58px; padding: 0 28px;
+  background: var(--md-sys-color-surface); border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  position: fixed; top: 0; left: 265px; right: 0; z-index: 25;
+}
+.app-status-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  height: 40px; padding: 0 28px;
+  font-size: 0.76rem; color: var(--md-sys-color-on-surface-variant);
+  background: var(--md-sys-color-surface); border-top: 1px solid var(--md-sys-color-outline-variant);
+  position: fixed; bottom: 0; left: 265px; right: 0; z-index: 25;
+}
+
+.hero-banner {
+  background: linear-gradient(135deg, var(--md-sys-color-primary) 0%, var(--md-sys-color-secondary) 100%);
+  color: #fff; border-radius: 24px; padding: 22px 24px; margin-bottom: 20px;
+  box-shadow: 0 6px 20px rgba(0, 100, 148, 0.25);
+}
+.hero-search-bar {
+  display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 999px; padding: 0 18px; height: 52px;
+}
+.hero-search-bar input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font: inherit; font-size: 0.95rem; color: var(--md-sys-color-on-surface); }
+.hero-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; cursor: pointer; font: inherit;
+  font-size: 0.8rem; font-weight: 600; color: #fff; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4);
+  transition: background-color .2s ease;
+}
+.hero-chip:hover { background: rgba(255,255,255,0.28); }
+.hero-chip.active { background: #fff; color: var(--md-sys-color-primary); border-color: #fff; }
+
+.medical-card {
+  display: flex; flex-direction: column; background: var(--md-sys-color-surface); border-radius: 20px; overflow: hidden;
+  border: 1px solid var(--md-sys-color-outline-variant); box-shadow: 0 1px 3px rgba(0,30,48,0.08);
+}
+.medical-card.has-alert { border-left: 5px solid var(--md-sys-color-error); }
+.medical-card.no-alert { border-left: 5px solid var(--md-sys-color-tertiary); }
+.medical-card-body { display: flex; flex-direction: column; gap: 12px; padding: 16px; flex: 1; }
+.medical-card-footer { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 16px; }
+.ficha-badge { font-size: 0.74rem; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.alert-chip { font-size: 0.68rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); white-space: nowrap; }
+.success-badge { font-size: 0.82rem; font-weight: 700; padding: 8px 12px; border-radius: 12px; background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+
+.stat-card { background: var(--md-sys-color-surface); border: 1px solid var(--md-sys-color-outline-variant); border-radius: 20px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,30,48,0.06); }
+.stat-card.primary { border-top: 4px solid var(--md-sys-color-primary); }
+.stat-card.error { border-top: 4px solid var(--md-sys-color-error); }
+.stat-card.success { border-top: 4px solid var(--md-sys-color-tertiary); }
+.stat-card.warning { border-top: 4px solid #D97706; }
+
+.ficha-vertical-sheet { background: #fff; color: #1e293b; padding: 14px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.hero-chips-mobile {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hero-chips-mobile::-webkit-scrollbar {
+  display: none;
+}
+.hero-chips-mobile .hero-chip {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+}
+
+.mobile-fab {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .app-main-content { margin: 0 !important; padding: 54px 0 0 !important; }
+  .app-main-scroll { padding: 14px 14px 156px; }
+  .app-top-bar { left: 0; height: 54px; padding: 0 14px; }
+  .app-status-bar { display: none; }
+  .hero-banner { border-radius: 20px; padding: 16px; }
+  .mobile-fab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    position: fixed;
+    right: 16px;
+    bottom: 88px;
+    height: 50px;
+    padding: 0 18px;
+    border-radius: 16px;
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    font-family: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-decoration: none;
+    box-shadow: 0 6px 20px rgba(0, 100, 148, 0.38), 0 2px 6px rgba(0, 30, 48, 0.18);
+    z-index: 45;
+    transition: transform 0.18s var(--md-easing-standard), box-shadow 0.2s ease;
+  }
+  .mobile-fab:active {
+    transform: scale(0.96);
   }
 }
