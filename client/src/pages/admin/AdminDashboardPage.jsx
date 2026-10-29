@@ -147,7 +147,7 @@ export default function AdminDashboardPage() {
   }, []);
 
   const handleCopyPublicLink = () => {
-    const url = window.location.origin + '/';
+    const url = window.location.origin + '/inscripcion';
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
@@ -295,7 +295,7 @@ export default function AdminDashboardPage() {
           <div className="app-nav-divider" />
 
           <Link
-            to="/"
+            to="/inscripcion"
             target="_blank"
             className="app-nav-item"
             style={{ color: 'var(--md-sys-color-primary)' }}
@@ -432,7 +432,7 @@ export default function AdminDashboardPage() {
                     </div>
                     {!isMobileView && (
                       <Link
-                        to="/"
+                        to="/inscripcion"
                         className="md3-btn"
                         style={{ background: '#ffffff', color: 'var(--md-sys-color-primary)', fontWeight: 700, fontSize: '0.86rem' }}
                       >
@@ -1113,7 +1113,7 @@ export default function AdminDashboardPage() {
       {/* ==================== MOBILE FLOATING ACTION BUTTON (Cargar Nueva Ficha) ==================== */}
       {isMobileView && activeTab === 'fichas' && !fichaSeleccionada && (
         <Link
-          to="/"
+          to="/inscripcion"
           className="mobile-fab no-print"
           aria-label="Cargar Nueva Ficha"
         >

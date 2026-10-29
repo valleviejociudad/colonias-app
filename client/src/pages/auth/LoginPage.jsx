@@ -233,7 +233,7 @@ export default function LoginPage() {
 
         <div style={{ marginTop: '18px', textAlign: 'center' }}>
           <Link
-            to="/"
+            to="/inscripcion"
             style={{
               fontSize: '0.86rem',
               color: 'var(--md-sys-color-primary)',
@@ -244,7 +244,7 @@ export default function LoginPage() {
               gap: '6px'
             }}
           >
-            <ArrowLeft size={15} /> Volver al Formulario Público de Padres
+            <ArrowLeft size={15} /> Ir al Formulario Público de Padres
           </Link>
         </div>
       </motion.div>

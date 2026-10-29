@@ -19,7 +19,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<FormularioInscripcionPage />} />
+          <Route path="/" element={<Navigate to="/admin" replace />} />
           <Route path="/inscripcion" element={<FormularioInscripcionPage />} />
           <Route path="/ficha/:id" element={<VerFichaPublicaPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -31,7 +31,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
