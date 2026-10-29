@@ -1,9 +1,9 @@
-const CACHE_NAME = 'colonias-vv-v11';
+const CACHE_NAME = 'colonias-vv-v12';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon.svg'
+  '/icon.svg',\n  '/icon-192.png'
 ];
 
 self.addEventListener('install', (event) => {
