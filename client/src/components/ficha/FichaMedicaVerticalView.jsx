@@ -632,6 +632,7 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
             compact={true}
             nroFicha={ficha.nro_ficha}
             fecha={(ficha.fecha_inscripcion || '').slice(0, 10)}
+            logoDeporteSrc="/logodeportefichamedica.png"
           />
 
           <SedeBar />
@@ -666,6 +667,7 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
               compact={true}
               nroFicha={ficha.nro_ficha}
               fecha={(ficha.fecha_inscripcion || '').slice(0, 10)}
+              logoDeporteSrc="/logodeportefichamedica.png"
             />
 
             <SedeBar />

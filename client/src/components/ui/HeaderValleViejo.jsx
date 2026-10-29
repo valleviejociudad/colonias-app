@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function HeaderValleViejo({ compact = false, showTemporada = true, nroFicha = null, fecha = null }) {
+export default function HeaderValleViejo({ compact = false, showTemporada = true, nroFicha = null, fecha = null, logoDeporteSrc = '/logodeporte.png' }) {
   return (
     <div
       style={{
@@ -27,7 +27,7 @@ export default function HeaderValleViejo({ compact = false, showTemporada = true
         {/* Left: Logo Deporte (Blanco sobre celeste institucional) */}
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <img
-            src="/logodeporte.png"
+            src={logoDeporteSrc}
             alt="Deporte Valle Viejo"
             style={{
               height: compact ? '38px' : '46px',
