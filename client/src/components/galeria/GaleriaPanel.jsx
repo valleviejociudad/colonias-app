@@ -1434,7 +1434,18 @@ CLOUDINARY_API_SECRET=tu_api_secret`}
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              padding: isMobileView ? '12px' : '20px'
+              paddingTop: isMobileView
+                ? 'calc(12px + env(safe-area-inset-top, 0px))'
+                : '20px',
+              paddingBottom: isMobileView
+                ? 'calc(12px + env(safe-area-inset-bottom, 0px))'
+                : '20px',
+              paddingLeft: isMobileView
+                ? 'calc(12px + env(safe-area-inset-left, 0px))'
+                : '20px',
+              paddingRight: isMobileView
+                ? 'calc(12px + env(safe-area-inset-right, 0px))'
+                : '20px'
             }}
             onClick={() => {
               if (!editingPhoto) {
