@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Images,
@@ -1420,7 +1421,7 @@ CLOUDINARY_API_SECRET=tu_api_secret`}
       )}
 
       {/* ==================== VISOR LIGHTBOX PANTALLA COMPLETA ==================== */}
-      <AnimatePresence>
+      {createPortal(<AnimatePresence>
         {activePhoto && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -1430,7 +1431,7 @@ CLOUDINARY_API_SECRET=tu_api_secret`}
               position: 'fixed',
               inset: 0,
               background: 'rgba(2, 6, 23, 0.92)',
-              zIndex: 120,
+              zIndex: 100000,
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
@@ -1784,7 +1785,7 @@ CLOUDINARY_API_SECRET=tu_api_secret`}
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
     </div>
   );
 }
