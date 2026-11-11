@@ -93,6 +93,7 @@ export default function AdminDashboardPage() {
   });
   const [difusionResultado, setDifusionResultado] = useState(null);
   const [enviandoDifusion, setEnviandoDifusion] = useState(false);
+  const [errorOperacion, setErrorOperacion] = useState(null);
 
   // PWA Install Prompt & Link Copy
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -200,45 +201,67 @@ export default function AdminDashboardPage() {
 
   const handleEliminarFicha = async (id, nombre) => {
     if (!window.confirm(`¿Estás seguro de eliminar la ficha médica de ${nombre}?`)) return;
-    await authFetch(`/api/inscripciones/${id}`, { method: 'DELETE' });
-    cargarTodo();
+    try {
+      setErrorOperacion(null);
+      const res = await authFetch(`/api/inscripciones/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setErrorOperacion(data.error || `Error al eliminar la ficha de ${nombre}.`);
+        return;
+      }
+      cargarTodo();
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') { navigate('/login'); return; }
+      setErrorOperacion('No se pudo eliminar la ficha. Intentá de nuevo.');
+    }
   };
 
   const handleGuardarEdicionFicha = async (e) => {
     e.preventDefault();
     if (!editModalFicha) return;
-    const res = await authFetch(`/api/inscripciones/${editModalFicha.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        firma_profesional_texto: editModalFicha.firma_profesional_texto,
-        nino: {
-          peso: editModalFicha.peso,
-          talla: editModalFicha.talla,
-          imc: editModalFicha.imc,
-          presion_alta: editModalFicha.presion_alta,
-          presion_baja: editModalFicha.presion_baja,
-          presion_arterial:
-            editModalFicha.presion_alta && editModalFicha.presion_baja
-              ? `${editModalFicha.presion_alta}/${editModalFicha.presion_baja}`
-              : editModalFicha.presion_arterial,
-          circunferencia_cintura: editModalFicha.circunferencia_cintura,
-          esquema_vacunacion: editModalFicha.esquema_vacunacion
-        },
-        medica: {
-          observaciones: editModalFicha.observaciones,
-          antecedentes_personales: editModalFicha.antecedentes_personales
-        }
-      })
-    });
-    if (res.ok) {
-      setEditModalFicha(null);
-      cargarTodo();
+    setErrorOperacion(null);
+    try {
+      const res = await authFetch(`/api/inscripciones/${editModalFicha.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          firma_profesional_texto: editModalFicha.firma_profesional_texto,
+          nino: {
+            peso: editModalFicha.peso,
+            talla: editModalFicha.talla,
+            imc: editModalFicha.imc,
+            presion_alta: editModalFicha.presion_alta,
+            presion_baja: editModalFicha.presion_baja,
+            presion_arterial:
+              editModalFicha.presion_alta && editModalFicha.presion_baja
+                ? `${editModalFicha.presion_alta}/${editModalFicha.presion_baja}`
+                : editModalFicha.presion_arterial,
+            circunferencia_cintura: editModalFicha.circunferencia_cintura,
+            esquema_vacunacion: editModalFicha.esquema_vacunacion
+          },
+          medica: {
+            observaciones: editModalFicha.observaciones,
+            antecedentes_personales: editModalFicha.antecedentes_personales
+          }
+        })
+      });
+      if (res.ok) {
+        setEditModalFicha(null);
+        setErrorOperacion(null);
+        cargarTodo();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setErrorOperacion(data.error || 'Error al guardar los cambios de la ficha.');
+      }
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') { navigate('/login'); return; }
+      setErrorOperacion('No se pudo guardar la ficha. Intentá de nuevo.');
     }
   };
 
   const handleEnviarDifusion = async (e) => {
     e.preventDefault();
     setEnviandoDifusion(true);
+    setErrorOperacion(null);
     try {
       const res = await authFetch('/api/alertas', {
         method: 'POST',
@@ -252,16 +275,32 @@ export default function AdminDashboardPage() {
         setDifusionResultado(data);
         cargarTodo();
         setRefreshBanner((p) => p + 1);
+      } else {
+        setErrorOperacion(data.error || 'Error al enviar la difusión.');
       }
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') { navigate('/login'); return; }
+      setErrorOperacion('No se pudo enviar la difusión. Verificá tu conexión.');
     } finally {
       setEnviandoDifusion(false);
     }
   };
 
   const handleDesactivarAlerta = async (id) => {
-    await authFetch(`/api/alertas/${id}/desactivar`, { method: 'PUT' });
-    cargarTodo();
-    setRefreshBanner((p) => p + 1);
+    try {
+      setErrorOperacion(null);
+      const res = await authFetch(`/api/alertas/${id}/desactivar`, { method: 'PUT' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setErrorOperacion(data.error || 'Error al desactivar la alerta.');
+        return;
+      }
+      cargarTodo();
+      setRefreshBanner((p) => p + 1);
+    } catch (err) {
+      if (err.code === 'UNAUTHORIZED') { navigate('/login'); return; }
+      setErrorOperacion('No se pudo desactivar la alerta. Intentá de nuevo.');
+    }
   };
 
   const navItems = [
@@ -976,6 +1015,16 @@ export default function AdminDashboardPage() {
 
                   {/* WhatsApp & Email Results + History */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {errorOperacion && (
+                      <div role="alert" style={{ padding: '12px 16px', borderRadius: '10px',
+                        background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#b91c1c',
+                        fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        ⚠️ {errorOperacion}
+                        <button onClick={() => setErrorOperacion(null)}
+                          style={{ marginLeft: 'auto', background: 'none', border: 'none',
+                            cursor: 'pointer', color: '#b91c1c', fontWeight: 700 }}>✕</button>
+                      </div>
+                    )}
                     {difusionResultado && (
                       <motion.div
                         initial={{ opacity: 0, scale: 0.96 }}
@@ -986,6 +1035,13 @@ export default function AdminDashboardPage() {
                         <h3 className="font-display" style={{ fontSize: '1.15rem', color: '#0f172a' }}>
                           ✅ ¡Comunicado Emitido! ({difusionResultado.whatsappLinks?.length || 0} familias alcanzadas)
                         </h3>
+                        {difusionResultado.emailResult?.modo === 'sin_configurar' && (
+                          <p role="alert" style={{ fontSize: '0.85rem', color: '#92400e',
+                            background: '#fef3c7', border: '1px solid #fcd34d',
+                            borderRadius: '8px', padding: '8px 12px', marginTop: '8px' }}>
+                            ⚠️ <strong>Los correos NO se enviaron:</strong> SMTP no configurado. Para activar el envío de correos, configurá las variables <code>SMTP_HOST</code>, <code>SMTP_USER</code> y <code>SMTP_PASS</code> en Railway.
+                          </p>
+                        )}
                         <p style={{ fontSize: '0.85rem', color: '#475569', marginTop: '4px' }}>
                           <Mail size={14} style={{ verticalAlign: 'middle' }} /> Correos procesados:{' '}
                           <strong>{difusionResultado.emailResult?.enviados || 0}</strong>.

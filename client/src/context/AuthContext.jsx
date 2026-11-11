@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const AuthContext = createContext(null);
 
@@ -47,15 +47,39 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  const authFetch = async (url, options = {}) => {
+  const authFetch = useCallback(async (url, options = {}) => {
     const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const headers = {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(options.headers || {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     };
-    return fetch(url, { cache: 'no-store', ...options, headers });
-  };
+    const res = await fetch(url, { cache: 'no-store', ...options, headers });
+    if (res.status === 401) {
+      // Token expirado o inválido: limpiar sesión y lanzar error especial
+      setToken(null);
+      setUser(null);
+      const err = new Error('Sesión expirada. Por favor, iniciá sesión nuevamente.');
+      err.code = 'UNAUTHORIZED';
+      throw err;
+    }
+    return res;
+  }, [token]);
+
+  // Validar token al arrancar la app (evita sesiones colgadas)
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store'
+    }).then(r => {
+      if (r.status === 401) {
+        setToken(null);
+        setUser(null);
+      }
+    }).catch(() => { /* red caída: no cerrar sesión */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, token, login, logout, authFetch }}>
