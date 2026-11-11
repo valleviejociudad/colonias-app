@@ -703,7 +703,7 @@ app.get('/api/alertas', (req, res) => {
 
 app.post('/api/alertas', authMiddleware, requireRole('admin'), async (req, res) => {
   const { colonia_id, tipo, titulo, mensaje, suspender_colonia, enviar_email } = req.body;
-  const { queryAll, queryOne, runQuery } = getDb();
+  const { queryAll, queryOne, runQuery, saveDatabase } = getDb();
 
   if (!titulo || !mensaje) {
     return res.status(400).json({ error: 'Título y mensaje son obligatorios' });
@@ -720,11 +720,11 @@ app.post('/api/alertas', authMiddleware, requireRole('admin'), async (req, res) 
     runQuery('UPDATE colonias SET suspendida = 1, motivo_suspension = ?', [mensaje]);
   }
 
-  // Get affected parents for email and WhatsApp links
-  const whereClause = colonia_id ? 'WHERE i.colonia_id = ?' : '';
+  // Padres afectados: solo inscripciones activas; deduplicados por email (una familia con varios hijos recibe un solo correo)
+  const whereClause = colonia_id ? "WHERE i.colonia_id = ? AND i.estado = 'activo'" : "WHERE i.estado = 'activo'";
   const params = colonia_id ? [colonia_id] : [];
 
-  const padres = queryAll(
+  const todasFilas = queryAll(
     `SELECT p.apellido_nombre, p.telefono, p.whatsapp, p.email,
             n.apellido_nombre as nino_nombre, c.nombre as colonia_nombre
      FROM datos_padre p
@@ -735,18 +735,39 @@ app.post('/api/alertas', authMiddleware, requireRole('admin'), async (req, res) 
     params
   );
 
-  let emailResult = { enviados: 0, previewUrl: null };
-  if (enviar_email !== false && padres.length > 0) {
-    emailResult = await enviarEmailSuspension({
-      destinatarios: padres,
+  // Agrupar: un entry por email (mencionar todos los hijos en el correo)
+  const mapaEmail = new Map();
+  for (const fila of todasFilas) {
+    const key = (fila.email || '').trim().toLowerCase() || fila.telefono;
+    if (!key) continue;
+    if (!mapaEmail.has(key)) {
+      mapaEmail.set(key, { ...fila, nino_nombres: [fila.nino_nombre] });
+    } else {
+      mapaEmail.get(key).nino_nombres.push(fila.nino_nombre);
+    }
+  }
+  const padres = Array.from(mapaEmail.values()).map(e => ({
+    ...e,
+    nino_nombre: e.nino_nombres.filter(Boolean).join(' y ')
+  }));
+
+  // Guardar la alerta ANTES de enviar mails (si el envío falla, la alerta queda registrada)
+  const ins = runQuery(
+    `INSERT INTO alertas (colonia_id, tipo, titulo, mensaje, activa, enviada_email, enviada_whatsapp, destinatarios_count, creado_por)
+     VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?)`,
+    [
+      colonia_id || null,
+      tipo || 'suspension',
       titulo,
       mensaje,
-      coloniaNombre
-    });
-  }
+      padres.length,
+      req.user ? req.user.nombre : 'Administrador'
+    ]
+  );
+  saveDatabase();
 
-  // Generate direct wa.me links for every registered parent
-  const whatsappLinks = padres.map(p => {
+  // Links de WhatsApp: uno por familia (ya deduplicados)
+  const whatsappLinks = todasFilas.map(p => {
     const num = String(p.whatsapp || p.telefono || '').replace(/\D/g, '');
     const phone = num.startsWith('54') ? num : `549${num}`;
     const texto = `⚠️ *COLONIAS DE VERANO - MUNICIPALIDAD DE VALLE VIEJO*\n\nHola *${p.apellido_nombre}* (tutor de *${p.nino_nombre}*):\n\n*${titulo}*\n${mensaje}\n\n📍 Localidad: *${p.colonia_nombre || coloniaNombre}*`;
@@ -760,19 +781,16 @@ app.post('/api/alertas', authMiddleware, requireRole('admin'), async (req, res) 
     };
   });
 
-  const ins = runQuery(
-    `INSERT INTO alertas (colonia_id, tipo, titulo, mensaje, activa, enviada_email, enviada_whatsapp, destinatarios_count, creado_por)
-     VALUES (?, ?, ?, ?, 1, ?, 1, ?, ?)`,
-    [
-      colonia_id || null,
-      tipo || 'suspension',
-      titulo,
-      mensaje,
-      enviar_email !== false ? 1 : 0,
-      padres.length,
-      req.user ? req.user.nombre : 'Administrador'
-    ]
-  );
+  // Enviar correos (en segundo plano, sin bloquear la respuesta)
+  let emailResult = { modo: 'sin_configurar', enviados: 0, previewUrl: null };
+  if (enviar_email !== false && padres.length > 0) {
+    emailResult = await enviarEmailSuspension({ destinatarios: padres, titulo, mensaje, coloniaNombre });
+    // Actualizar el flag de email en la alerta según resultado real
+    if (emailResult.enviados > 0) {
+      runQuery('UPDATE alertas SET enviada_email = 1 WHERE id = ?', [ins.lastInsertRowid]);
+      saveDatabase();
+    }
+  }
 
   const alerta = queryOne(
     `SELECT a.*, c.nombre as colonia_nombre
@@ -791,14 +809,36 @@ app.post('/api/alertas', authMiddleware, requireRole('admin'), async (req, res) 
 
 app.put('/api/alertas/:id/desactivar', authMiddleware, requireRole('admin'), (req, res) => {
   const { id } = req.params;
-  const { runQuery, queryOne } = getDb();
+  const { runQuery, queryOne, queryAll, saveDatabase } = getDb();
   const alerta = queryOne('SELECT * FROM alertas WHERE id = ?', [id]);
-  runQuery('UPDATE alertas SET activa = 0 WHERE id = ?', [id]);
+  saveDatabase();
+
+  // Recalcular estado de suspensión colonia por colonia: queda suspendida solo si tiene otra alerta activa
   if (alerta && alerta.colonia_id) {
-    runQuery('UPDATE colonias SET suspendida = 0, motivo_suspension = NULL WHERE id = ?', [alerta.colonia_id]);
+    const otraActiva = queryOne(
+      'SELECT id FROM alertas WHERE activa = 1 AND (colonia_id = ? OR colonia_id IS NULL)',
+      [alerta.colonia_id]
+    );
+    if (!otraActiva) {
+      runQuery('UPDATE colonias SET suspendida = 0, motivo_suspension = NULL WHERE id = ?', [alerta.colonia_id]);
+    }
   } else {
-    runQuery('UPDATE colonias SET suspendida = 0, motivo_suspension = NULL');
+    // Era una alerta global: solo desuspender las que no tengan otra alerta activa (específica o global)
+    const otraGlobalActiva = queryOne('SELECT id FROM alertas WHERE activa = 1 AND colonia_id IS NULL');
+    if (!otraGlobalActiva) {
+      const todasCol = queryAll('SELECT id FROM colonias');
+      for (const col of todasCol) {
+        const otraEspecifica = queryOne(
+          'SELECT id FROM alertas WHERE activa = 1 AND colonia_id = ?',
+          [col.id]
+        );
+        if (!otraEspecifica) {
+          runQuery('UPDATE colonias SET suspendida = 0, motivo_suspension = NULL WHERE id = ?', [col.id]);
+        }
+      }
+    }
   }
+  saveDatabase();
   res.json({ ok: true });
 });
 
@@ -807,13 +847,18 @@ app.put('/api/alertas/:id/desactivar', authMiddleware, requireRole('admin'), (re
 app.get('/api/estadisticas', authMiddleware, (req, res) => {
   const { queryOne, queryAll } = getDb();
 
-  const totalInscriptos = queryOne('SELECT COUNT(*) as total FROM inscripciones WHERE estado = "activo"')?.total || 0;
+  const totalInscriptos = queryOne("SELECT COUNT(*) as total FROM inscripciones WHERE estado = 'activo'")?.total || 0;
   const totalColonias = queryOne('SELECT COUNT(*) as total FROM colonias WHERE activa = 1')?.total || 0;
   const conObraSocial = queryOne('SELECT COUNT(*) as total FROM datos_nino WHERE tiene_obra_social = 1')?.total || 0;
   const conAlertaMedica = queryOne(`
-    SELECT COUNT(*) as total FROM ficha_medica
-    WHERE alergias_si = 1 OR cardiacas_si = 1 OR asmas_si = 1 OR diabetes_si = 1
-       OR neurologicas_si = 1 OR celiaquia_si = 1 OR discapacidad_si = 1 OR oncologicas_si = 1
+    SELECT COUNT(DISTINCT m.inscripcion_id) as total
+    FROM ficha_medica m
+    INNER JOIN inscripciones i ON i.id = m.inscripcion_id
+    WHERE i.estado = 'activo'
+      AND (m.alergias_si = 1 OR m.cardiacas_si = 1 OR m.asmas_si = 1 OR m.diabetes_si = 1
+        OR m.neurologicas_si = 1 OR m.celiaquia_si = 1 OR m.discapacidad_si = 1
+        OR m.oncologicas_si = 1 OR m.tiroides_si = 1 OR m.rinones_si = 1
+        OR m.auditivas_si = 1 OR m.oftalmologicas_si = 1 OR m.otras_si = 1)
   `)?.total || 0;
   const alertasActivas = queryOne('SELECT COUNT(*) as total FROM alertas WHERE activa = 1')?.total || 0;
 

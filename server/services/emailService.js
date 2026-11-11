@@ -25,7 +25,13 @@ async function getTransporter() {
     });
   }
 
-  // Fallback to Ethereal test account for local development without credentials
+  // En producción no hay Ethereal: retornar null para que se muestre advertencia clara
+  if (process.env.NODE_ENV === 'production') {
+    console.error('⚠️  SMTP no configurado. Los correos de alerta NO se enviarán. Configurá SMTP_HOST, SMTP_USER y SMTP_PASS en las variables de entorno.');
+    return null;
+  }
+
+  // Solo en desarrollo local: usar Ethereal (buzón de prueba)
   try {
     const testAccount = await nodemailer.createTestAccount();
     return nodemailer.createTransport({
@@ -48,8 +54,8 @@ async function enviarEmailSuspension({ destinatarios, titulo, mensaje, coloniaNo
 
   if (!transporter) {
     return {
-      modo: 'simulado_local',
-      enviados: destinatarios.length,
+      modo: 'sin_configurar',
+      enviados: 0,
       previewUrl: null
     };
   }
@@ -59,7 +65,7 @@ async function enviarEmailSuspension({ destinatarios, titulo, mensaje, coloniaNo
     if (!dest.email) continue;
     try {
       const info = await transporter.sendMail({
-        from: '"Colonias de Verano - Municipalidad de Valle Viejo" <deportes@valleviejo.gob.ar>',
+        from: process.env.SMTP_FROM || '"Colonias de Verano - Municipalidad de Valle Viejo" <deportes@valleviejo.gob.ar>',
         to: dest.email,
         subject: `⚠️ AVISO IMPORTANTE: ${titulo} - ${coloniaNombre || 'Colonias de Verano'}`,
         html: `
