@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Shield, ArrowLeft } from 'lucide-react';
+import { Shield, ArrowLeft, Mail, Lock, LogIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import HeaderValleViejo from '../../components/ui/HeaderValleViejo';
 
@@ -96,48 +96,95 @@ export default function LoginPage() {
         )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* MD3 Outlined Text Field — Email */}
-          <md-outlined-text-field
-            label="Correo electrónico"
-            type="email"
-            value={email}
-            required
-            style={{ width: '100%' }}
-            onInput={(e) => setEmail(e.target.value)}
-          >
-            <md-icon slot="leading-icon">mail</md-icon>
-          </md-outlined-text-field>
+          {/* Campo Email */}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>
+              Correo electrónico *
+            </span>
+            <div style={{ position: 'relative' }}>
+              <Mail size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--md-sys-color-on-surface-variant)', pointerEvents: 'none' }} />
+              <input
+                type="email"
+                value={email}
+                required
+                autoComplete="email"
+                placeholder="correo@ejemplo.com"
+                onChange={(e) => setEmail(e.target.value)}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '12px 14px 12px 42px',
+                  borderRadius: '10px',
+                  border: '1.5px solid var(--md-sys-color-outline)',
+                  fontSize: '1rem',
+                  background: 'var(--md-sys-color-surface)',
+                  color: 'var(--md-sys-color-on-surface)',
+                  outline: 'none',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={e => e.target.style.borderColor = 'var(--md-sys-color-primary)'}
+                onBlur={e => e.target.style.borderColor = 'var(--md-sys-color-outline)'}
+              />
+            </div>
+          </label>
 
-          {/* MD3 Outlined Text Field — Password */}
-          <md-outlined-text-field
-            label="Contraseña"
-            type="password"
-            value={password}
-            required
-            style={{ width: '100%' }}
-            onInput={(e) => setPassword(e.target.value)}
-          >
-            <md-icon slot="leading-icon">lock</md-icon>
-          </md-outlined-text-field>
+          {/* Campo Contraseña */}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>
+              Contraseña *
+            </span>
+            <div style={{ position: 'relative' }}>
+              <Lock size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--md-sys-color-on-surface-variant)', pointerEvents: 'none' }} />
+              <input
+                type="password"
+                value={password}
+                required
+                autoComplete="current-password"
+                placeholder="••••••••"
+                onChange={(e) => setPassword(e.target.value)}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '12px 14px 12px 42px',
+                  borderRadius: '10px',
+                  border: '1.5px solid var(--md-sys-color-outline)',
+                  fontSize: '1rem',
+                  background: 'var(--md-sys-color-surface)',
+                  color: 'var(--md-sys-color-on-surface)',
+                  outline: 'none',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={e => e.target.style.borderColor = 'var(--md-sys-color-primary)'}
+                onBlur={e => e.target.style.borderColor = 'var(--md-sys-color-outline)'}
+              />
+            </div>
+          </label>
 
-          {/* MD3 Filled Button — Submit */}
-          <md-filled-button
+          {/* Botón submit */}
+          <button
             type="submit"
-            style={{ width: '100%', '--md-filled-button-container-height': '48px' }}
-            disabled={loading || undefined}
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '14px',
+              borderRadius: '24px',
+              border: 'none',
+              background: loading ? 'var(--md-sys-color-outline)' : 'var(--md-sys-color-primary)',
+              color: '#fff',
+              fontSize: '1rem',
+              fontWeight: 700,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'background 0.2s, opacity 0.2s',
+              opacity: loading ? 0.7 : 1
+            }}
           >
-            {loading ? (
-              <>
-                <md-circular-progress indeterminate style={{ '--md-circular-progress-size': '20px', '--md-circular-progress-active-indicator-color': '#ffffff' }} slot="icon" />
-                Ingresando...
-              </>
-            ) : (
-              <>
-                <md-icon slot="icon">login</md-icon>
-                Ingresar al Panel
-              </>
-            )}
-          </md-filled-button>
+            <LogIn size={18} />
+            {loading ? 'Ingresando...' : 'Ingresar al Panel'}
+          </button>
         </form>
 
         <div style={{ marginTop: '18px', textAlign: 'center' }}>
