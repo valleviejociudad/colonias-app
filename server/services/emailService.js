@@ -1,5 +1,17 @@
 const nodemailer = require('nodemailer');
 
+function esc(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function escMultiline(value) {
+  return esc(value).replace(/\n/g, '<br>');
+}
+
 async function getTransporter() {
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     return nodemailer.createTransport({
@@ -58,11 +70,11 @@ async function enviarEmailSuspension({ destinatarios, titulo, mensaje, coloniaNo
             </div>
             <div style="padding: 24px; background: #ffffff;">
               <div style="background: #fff3cd; border-left: 5px solid #ff9800; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
-                <h3 style="margin: 0 0 8px; color: #b26a00;">${titulo}</h3>
-                <p style="margin: 0; color: #333; font-size: 15px; line-height: 1.5;">${mensaje}</p>
+                <h3 style="margin: 0 0 8px; color: #b26a00;">${esc(titulo)}</h3>
+                <p style="margin: 0; color: #333; font-size: 15px; line-height: 1.5;">${escMultiline(mensaje)}</p>
               </div>
               <p style="color: #555; font-size: 14px;">
-                Estimado/a <strong>${dest.apellido_nombre || 'Padre/Madre/Tutor'}</strong>, le enviamos este comunicado oficial respecto a la localidad <strong>${coloniaNombre || 'Todas las localidades'}</strong>.
+                Estimado/a <strong>${esc(dest.apellido_nombre || 'Padre/Madre/Tutor')}</strong>, le enviamos este comunicado oficial respecto a la localidad <strong>${esc(coloniaNombre || 'Todas las localidades')}</strong>.
               </p>
               <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
               <p style="font-size: 12px; color: #888; text-align: center; margin: 0;">

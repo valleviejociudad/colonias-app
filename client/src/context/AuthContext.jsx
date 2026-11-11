@@ -42,19 +42,6 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const loginWithGoogle = async ({ email, nombre, googleId, avatar }) => {
-    const res = await fetch('/api/auth/google', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, nombre, googleId, avatar })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error con Google Auth');
-    setToken(data.token);
-    setUser(data.user);
-    return data.user;
-  };
-
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -71,7 +58,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, loginWithGoogle, logout, authFetch }}>
+    <AuthContext.Provider value={{ user, token, login, logout, authFetch }}>
       {children}
     </AuthContext.Provider>
   );

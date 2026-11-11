@@ -7,9 +7,10 @@ Plataforma Web + PWA (Android & iOS) para la inscripción pública y gestión de
 ## ✨ Características Principales
 
 1. **Formulario Público estilo Google Forms (Material Design 3):**
-   - Accesible mediante un único link (`http://localhost:5173/`), sin necesidad de crear cuenta ni descargar ninguna aplicación.
-   - **Detector de DNI en tiempo real:** Apenas el padre/tutor ingresa el DNI del niño/a, el sistema verifica si ya fue inscripto y le muestra la sede, número de ficha y acceso directo para ver/descargar su ficha médica.
+   - Accesible mediante el link `/inscripcion`, sin necesidad de crear cuenta ni descargar ninguna aplicación.
+   - **Detector de DNI en tiempo real:** verifica si el niño/a ya fue inscripto antes de enviar.
    - **Cálculo automático** de edad e Índice de Masa Corporal (IMC).
+   - Al finalizar, se genera un **link privado y secreto** que permite a la familia volver a ver y descargar su ficha médica.
 2. **Planilla Oficial Vertical de Ficha Médica:**
    - Respeta el diseño oficial y todos los campos legales y clínicos de la ficha en papel de **Deportes Valle Viejo**, adaptada en formato **vertical A4** para lectura cómoda en celular, impresión directa y descarga en PDF.
 3. **Panel Admin y Coordinadores + Guardia de Urgencias:**
@@ -19,7 +20,7 @@ Plataforma Web + PWA (Android & iOS) para la inscripción pública y gestión de
    - Instalable como App nativa en celulares Android y iPhone, con barra de navegación inferior estilo Material Design 3 y soporte de caché offline.
 5. **Difusión de Suspensiones por Mal Clima o Fuerza Mayor:**
    - Publica un banner de alerta en tiempo real en toda la plataforma.
-   - Envía **correos electrónicos (Email) automáticos** a los padres inscriptos.
+   - Envía **correos electrónicos automáticos** a los padres inscriptos.
    - Genera el listado de envío directo por **WhatsApp (`wa.me`)** sin requerir Meta API.
 6. **Banco de Imágenes Privado (Cloudinary):**
    - Acceso exclusivo para personal autorizado logueado (`/admin` → pestaña **Banco de Imágenes**).
@@ -31,25 +32,65 @@ Plataforma Web + PWA (Android & iOS) para la inscripción pública y gestión de
 ## 🚀 Cómo probarlo en Local
 
 ```bash
-# Levantar Backend (puerto 3001) y Frontend (puerto 5173) al mismo tiempo
+# 1. Copiá el archivo de ejemplo de variables de entorno
+cp .env.example .env
+# (en Windows: copy .env.example .env)
+
+# 2. Levantar Backend (puerto 3001) y Frontend (puerto 5173) al mismo tiempo
 npm run dev
 ```
 
-- **Formulario Público (Padres):** [http://localhost:5173/](http://localhost:5173/)
-- **Panel Admin / PWA:** [http://localhost:5173/admin](http://localhost:5173/admin)
-  - **Usuario Admin:** `admin@valleviejo.gob.ar` / Contraseña: `admin123`
-  - **Usuario Coordinador:** `coordinador@valleviejo.gob.ar` / Contraseña: `coord123`
-  - **DNI de prueba ya inscripto** (para probar el detector en tiempo real): `54123890` o `56890123`
+- **Formulario Público (Padres):** http://localhost:5173/inscripcion
+- **Panel Admin / PWA:** http://localhost:5173/admin
+
+En modo `development` (sin `ADMIN_EMAIL`/`ADMIN_PASSWORD`), el sistema crea automáticamente dos usuarios de prueba locales:
+
+| Usuario | Email | Contraseña |
+|---|---|---|
+| Admin (solo local) | `admin@valleviejo.gob.ar` | `admin123` |
+| Coordinador (solo local) | `coordinador@valleviejo.gob.ar` | `coord123` |
+
+> ⚠️ Estos usuarios de prueba **no se crean en producción** (`NODE_ENV=production`). Usá siempre `ADMIN_EMAIL` y `ADMIN_PASSWORD` en Railway.
 
 ---
 
 ## ☁️ Cómo desplegar en Railway
 
 El proyecto ya incluye `railway.json` configurado:
+
 1. Subí este repositorio a GitHub.
-2. En **Railway**, seleccioná **"New Project" -> "Deploy from GitHub repo"**.
+2. En **Railway**, seleccioná **"New Project" → "Deploy from GitHub repo"**.
 3. Railway ejecutará automáticamente `npm run install:all && npm run build` y levantará el servidor unificado con `npm start`.
-4. Configurá las variables de entorno en `.env` (local) y en la pestaña **Variables** de Railway para habilitar el **Banco de Imágenes** con Cloudinary:
+4. ⚠️ **Antes de que el primer deploy arranque**, configurá las siguientes variables de entorno en la pestaña **Variables** de Railway:
+
+```env
+NODE_ENV=production
+
+# Generar con: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+JWT_SECRET=clave_larga_y_aleatoria_de_minimo_32_caracteres
+
+# Usuario administrador inicial (se crea al primer arranque si la tabla está vacía)
+ADMIN_EMAIL=tu_correo@valleviejo.gob.ar
+ADMIN_PASSWORD=contrasena_segura_minimo_8_caracteres
+
+# Correo SMTP para las alertas a padres
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=tu_correo@gmail.com
+SMTP_PASS=tu_clave_de_aplicacion
+SMTP_FROM="Colonias de Verano - Municipalidad de Valle Viejo" <deportes@valleviejo.gob.ar>
+```
+
+5. **Persistencia de la base de datos:** creá un **Volume** en Railway montado en `/data` y agregá la variable:
+
+```env
+DB_PATH=/data/colonias.sqlite
+```
+
+> ⚠️ **Sin el Volume + DB_PATH, la base de datos se borra en cada nuevo deploy.** Es obligatorio para no perder inscripciones.
+
+6. Optativo — para habilitar el Banco de Imágenes (Cloudinary):
 
 ```env
 CLOUDINARY_CLOUD_NAME=tu_cloud_name
@@ -57,4 +98,4 @@ CLOUDINARY_API_KEY=tu_api_key
 CLOUDINARY_API_SECRET=tu_api_secret
 ```
 
-> Nota: Si las variables de Cloudinary no están configuradas, la plataforma sigue funcionando normalmente y los endpoints `/api/galeria` responden `503`.
+> Si las variables de Cloudinary no están configuradas, la plataforma sigue funcionando normalmente y los endpoints `/api/galeria` responden `503`.

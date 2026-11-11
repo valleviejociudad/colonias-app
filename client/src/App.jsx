@@ -21,7 +21,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/admin" replace />} />
           <Route path="/inscripcion" element={<FormularioInscripcionPage />} />
-          <Route path="/ficha/:id" element={<VerFichaPublicaPage />} />
+          <Route path="/ficha/:token" element={<VerFichaPublicaPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route
             path="/admin/*"

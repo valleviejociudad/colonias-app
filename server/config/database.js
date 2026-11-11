@@ -2,6 +2,7 @@ const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'colonias.sqlite');
 
@@ -93,6 +94,7 @@ async function initDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       colonia_id INTEGER NOT NULL,
       nro_ficha TEXT NOT NULL,
+      token_publico TEXT,
       fecha_inscripcion TEXT DEFAULT (datetime('now', 'localtime')),
       autorizado INTEGER DEFAULT 1,
       estado TEXT DEFAULT 'activo',
@@ -218,20 +220,47 @@ async function initDatabase() {
   `);
   saveDatabase();
 
-  // Seed default users if empty
+  // Migración: token secreto de acceso de la familia a su ficha (bases ya existentes)
+  const colsInscripciones = queryAll('PRAGMA table_info(inscripciones)').map((c) => c.name);
+  if (!colsInscripciones.includes('token_publico')) {
+    dbInstance.run('ALTER TABLE inscripciones ADD COLUMN token_publico TEXT');
+  }
+  dbInstance.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_inscripciones_token ON inscripciones(token_publico)');
+
+  // Usuario administrador inicial
+  const IS_PROD = process.env.NODE_ENV === 'production';
   const userCount = queryOne('SELECT COUNT(*) as count FROM usuarios');
   if (!userCount || userCount.count === 0) {
-    const adminHash = bcrypt.hashSync('admin123', 10);
-    const coordHash = bcrypt.hashSync('coord123', 10);
+    const adminEmail = String(process.env.ADMIN_EMAIL || '').trim();
+    const adminPassword = String(process.env.ADMIN_PASSWORD || '');
 
-    runQuery(
-      'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
-      ['Subsecretaría de Deportes (Admin)', 'admin@valleviejo.gob.ar', adminHash, 'admin']
-    );
-    runQuery(
-      'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
-      ['Coordinación General Colonias', 'coordinador@valleviejo.gob.ar', coordHash, 'coordinador']
-    );
+    if (adminEmail && adminPassword.length >= 8) {
+      runQuery(
+        'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
+        ['Administrador', adminEmail, bcrypt.hashSync(adminPassword, 10), 'admin']
+      );
+      console.log(`✅ Usuario administrador inicial creado: ${adminEmail}`);
+    } else if (!IS_PROD) {
+      // Solo desarrollo local: usuarios de prueba
+      runQuery(
+        'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
+        ['Subsecretaría de Deportes (Admin)', 'admin@valleviejo.gob.ar', bcrypt.hashSync('admin123', 10), 'admin']
+      );
+      runQuery(
+        'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
+        ['Coordinación General Colonias', 'coordinador@valleviejo.gob.ar', bcrypt.hashSync('coord123', 10), 'coordinador']
+      );
+      console.warn('⚠️  Modo desarrollo: usuarios de prueba creados (admin123 / coord123). No usar en producción.');
+    } else {
+      console.error('❌ No hay usuarios y faltan ADMIN_EMAIL / ADMIN_PASSWORD (mín. 8 caracteres). Nadie podrá ingresar al panel.');
+    }
+  }
+
+  // Aviso si quedan contraseñas de prueba conocidas
+  for (const u of queryAll('SELECT email, password_hash FROM usuarios')) {
+    if (u.password_hash && (bcrypt.compareSync('admin123', u.password_hash) || bcrypt.compareSync('coord123', u.password_hash))) {
+      console.warn(`⚠️  El usuario ${u.email} todavía usa una contraseña de prueba conocida. Cambiala.`);
+    }
   }
 
   // Seed default colonias if empty
@@ -274,6 +303,11 @@ async function initDatabase() {
 
     // Seed sample medical records for immediate testing
     seedSampleInscripciones();
+  }
+
+  const sinToken = queryAll('SELECT id FROM inscripciones WHERE token_publico IS NULL OR token_publico = ""');
+  for (const row of sinToken) {
+    dbInstance.run('UPDATE inscripciones SET token_publico = ? WHERE id = ?', [crypto.randomBytes(24).toString('hex'), row.id]);
   }
 
   saveDatabase();

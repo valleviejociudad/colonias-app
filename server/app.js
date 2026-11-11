@@ -4,19 +4,81 @@ const cors = require('cors');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const { initDatabase, getDb } = require('./config/database');
 const { enviarEmailSuspension } = require('./services/emailService');
 const cloudinaryService = require('./services/cloudinaryService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'valle_viejo_colonias_secret_2025';
+const IS_PROD = process.env.NODE_ENV === 'production';
+const JWT_SECRET = process.env.JWT_SECRET;
+const INSECURE_SECRETS = ['valle_viejo_colonias_secret_2025', 'cambiar_por_secreto_largo_aleatorio'];
 
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+if (!JWT_SECRET || INSECURE_SECRETS.includes(JWT_SECRET) || JWT_SECRET.length < 32) {
+  if (IS_PROD) {
+    console.error('❌ JWT_SECRET no definido o inseguro (mínimo 32 caracteres aleatorios). El servidor no inicia en producción.');
+    process.exit(1);
+  }
+  console.warn('⚠️  JWT_SECRET no definido o débil. Usá uno largo y aleatorio en .env (obligatorio en producción).');
+}
+const SIGNING_SECRET = JWT_SECRET || crypto.randomBytes(32).toString('hex');
+const TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h';
+const ROLES_VALIDOS = ['admin', 'coordinador', 'lectura'];
+
+// Railway / proxies: necesario para que el rate limit use la IP real del cliente
+app.set('trust proxy', 1);
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        'script-src': ["'self'", "'unsafe-inline'"],
+        'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        'font-src': ["'self'", 'https://fonts.gstatic.com', 'data:'],
+        'img-src': ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com'],
+        'connect-src': ["'self'", 'https://api.cloudinary.com'],
+        'upgrade-insecure-requests': null
+      }
+    },
+    crossOriginEmbedderPolicy: false
+  })
+);
+
+// CORS: el front se sirve desde el mismo origen. Solo se habilita si se define CORS_ORIGIN.
+if (process.env.CORS_ORIGIN) {
+  app.use(cors({ origin: process.env.CORS_ORIGIN.split(',').map((s) => s.trim()) }));
+}
+app.use(express.json({ limit: '200kb' }));
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   next();
+});
+
+const limiteMsg = (error) => ({ error });
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: limiteMsg('Demasiados intentos de ingreso. Esperá 15 minutos e intentá de nuevo.')
+});
+const inscripcionLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: limiteMsg('Demasiadas inscripciones desde esta conexión. Intentá más tarde.')
+});
+const consultaPublicaLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: limiteMsg('Demasiadas consultas. Esperá un minuto.')
 });
 
 // Auth Middleware
@@ -27,12 +89,29 @@ function authMiddleware(req, res, next) {
   }
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, SIGNING_SECRET);
     req.user = decoded;
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
+}
+
+// Autorización por rol (siempre usar después de authMiddleware)
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.rol)) {
+      return res.status(403).json({ error: 'No tenés permisos para realizar esta acción' });
+    }
+    next();
+  };
+}
+
+function escribeFichas(req, res, next) {
+  if (req.user && String(req.user.rol).toLowerCase() === 'lectura') {
+    return res.status(403).json({ error: 'Tu rol es de solo lectura' });
+  }
+  next();
 }
 
 // Helper to build full medical record object
@@ -61,7 +140,7 @@ function getFullInscripcionById(id) {
 
 // ==================== AUTH ROUTES ====================
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', loginLimiter, (req, res) => {
   const { email, password } = req.body;
   const { queryOne } = getDb();
 
@@ -76,44 +155,8 @@ app.post('/api/auth/login', (req, res) => {
 
   const token = jwt.sign(
     { id: user.id, nombre: user.nombre, email: user.email, rol: user.rol },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  );
-
-  res.json({
-    token,
-    user: {
-      id: user.id,
-      nombre: user.nombre,
-      email: user.email,
-      rol: user.rol,
-      avatar: user.avatar
-    }
-  });
-});
-
-app.post('/api/auth/google', (req, res) => {
-  const { email, nombre, googleId, avatar } = req.body;
-  const { queryOne, runQuery } = getDb();
-
-  if (!email) {
-    return res.status(400).json({ error: 'Datos de Google incompletos' });
-  }
-
-  let user = queryOne('SELECT * FROM usuarios WHERE lower(email) = lower(?)', [email.trim()]);
-  if (!user) {
-    const hash = bcrypt.hashSync(googleId || 'google_oauth_user', 10);
-    const result = runQuery(
-      'INSERT INTO usuarios (nombre, email, password_hash, google_id, rol, avatar) VALUES (?, ?, ?, ?, ?, ?)',
-      [nombre || email.split('@')[0], email.trim(), hash, googleId || 'google', 'coordinador', avatar || '']
-    );
-    user = queryOne('SELECT * FROM usuarios WHERE id = ?', [result.lastInsertRowid]);
-  }
-
-  const token = jwt.sign(
-    { id: user.id, nombre: user.nombre, email: user.email, rol: user.rol },
-    JWT_SECRET,
-    { expiresIn: '7d' }
+    SIGNING_SECRET,
+    { expiresIn: TOKEN_EXPIRES_IN }
   );
 
   res.json({
@@ -135,17 +178,24 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
   res.json({ user });
 });
 
-app.get('/api/auth/usuarios', authMiddleware, (req, res) => {
+app.get('/api/auth/usuarios', authMiddleware, requireRole('admin'), (req, res) => {
   const { queryAll } = getDb();
   const usuarios = queryAll('SELECT id, nombre, email, rol, created_at FROM usuarios ORDER BY id ASC');
   res.json(usuarios);
 });
 
-app.post('/api/auth/usuarios', authMiddleware, (req, res) => {
+app.post('/api/auth/usuarios', authMiddleware, requireRole('admin'), (req, res) => {
   const { nombre, email, password, rol } = req.body;
   const { queryOne, runQuery } = getDb();
   if (!nombre || !email || !password) {
     return res.status(400).json({ error: 'Completá todos los campos del usuario' });
+  }
+  const rolFinal = rol || 'coordinador';
+  if (!ROLES_VALIDOS.includes(rolFinal)) {
+    return res.status(400).json({ error: 'Rol inválido' });
+  }
+  if (String(password).length < 8) {
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
   }
   const existing = queryOne('SELECT id FROM usuarios WHERE lower(email) = lower(?)', [email.trim()]);
   if (existing) {
@@ -154,9 +204,9 @@ app.post('/api/auth/usuarios', authMiddleware, (req, res) => {
   const hash = bcrypt.hashSync(password, 10);
   const result = runQuery(
     'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
-    [nombre.trim(), email.trim(), hash, rol || 'coordinador']
+    [nombre.trim(), email.trim(), hash, rolFinal]
   );
-  res.status(201).json({ id: result.lastInsertRowid, nombre, email, rol: rol || 'coordinador' });
+  res.status(201).json({ id: result.lastInsertRowid, nombre, email, rol: rolFinal });
 });
 
 // ==================== COLONIAS ROUTES ====================
@@ -172,7 +222,7 @@ app.get('/api/colonias', (req, res) => {
   res.json(colonias);
 });
 
-app.post('/api/colonias', authMiddleware, (req, res) => {
+app.post('/api/colonias', authMiddleware, requireRole('admin'), (req, res) => {
   const {
     nombre, sede, direccion, descripcion, turno,
     edades, coordinador_responsable, telefono_sede, fecha_inicio, fecha_fin
@@ -201,7 +251,7 @@ app.post('/api/colonias', authMiddleware, (req, res) => {
   res.status(201).json(nueva);
 });
 
-app.put('/api/colonias/:id', authMiddleware, (req, res) => {
+app.put('/api/colonias/:id', authMiddleware, requireRole('admin'), (req, res) => {
   const { id } = req.params;
   const {
     nombre, sede, direccion, descripcion, turno,
@@ -241,7 +291,7 @@ app.put('/api/colonias/:id', authMiddleware, (req, res) => {
   res.json(actualizada);
 });
 
-app.delete('/api/colonias/:id', authMiddleware, (req, res) => {
+app.delete('/api/colonias/:id', authMiddleware, requireRole('admin'), (req, res) => {
   const { id } = req.params;
   const { runQuery } = getDb();
   runQuery('DELETE FROM colonias WHERE id = ?', [id]);
@@ -250,7 +300,7 @@ app.delete('/api/colonias/:id', authMiddleware, (req, res) => {
 
 // ==================== VERIFICAR DNI EN TIEMPO REAL ====================
 
-app.get('/api/inscripciones/verificar-dni/:dni', (req, res) => {
+app.get('/api/inscripciones/verificar-dni/:dni', consultaPublicaLimiter, (req, res) => {
   const cleanDni = String(req.params.dni || '').replace(/\D/g, '');
   if (!cleanDni || cleanDni.length < 6) {
     return res.json({ existe: false });
@@ -258,26 +308,13 @@ app.get('/api/inscripciones/verificar-dni/:dni', (req, res) => {
 
   const { queryOne } = getDb();
   const existente = queryOne(
-    `SELECT n.dni, n.apellido_nombre as nino_nombre, n.edad,
-            i.id as inscripcion_id, i.nro_ficha, i.fecha_inscripcion,
-            c.nombre as colonia_nombre, c.sede as colonia_sede, c.turno as colonia_turno,
-            p.apellido_nombre as padre_nombre
-     FROM datos_nino n
-     INNER JOIN inscripciones i ON i.id = n.inscripcion_id
-     LEFT JOIN colonias c ON c.id = i.colonia_id
-     LEFT JOIN datos_padre p ON p.inscripcion_id = i.id
+    `SELECT n.id FROM datos_nino n
      WHERE REPLACE(REPLACE(n.dni, '.', ''), ' ', '') = ?`,
     [cleanDni]
   );
 
-  if (existente) {
-    return res.json({
-      existe: true,
-      datos: existente
-    });
-  }
-
-  res.json({ existe: false });
+  // Solo se informa si existe: nunca se devuelven datos del niño, del tutor ni de la sede.
+  res.json({ existe: Boolean(existente) });
 });
 
 // ==================== INSCRIPCIONES & FICHAS MEDICAS ====================
@@ -322,13 +359,27 @@ app.get('/api/inscripciones', authMiddleware, (req, res) => {
   res.json(rows);
 });
 
-app.get('/api/inscripciones/:id', (req, res) => {
+app.get('/api/inscripciones/:id', authMiddleware, (req, res) => {
   const full = getFullInscripcionById(req.params.id);
   if (!full) return res.status(404).json({ error: 'Ficha médica no encontrada' });
   res.json(full);
 });
 
-app.post('/api/inscripciones', (req, res) => {
+// Acceso de la familia a su propia ficha mediante un link secreto (token aleatorio, no adivinable)
+app.get('/api/fichas/publica/:token', consultaPublicaLimiter, (req, res) => {
+  const token = String(req.params.token || '');
+  if (!/^[a-f0-9]{48}$/.test(token)) {
+    return res.status(404).json({ error: 'Ficha médica no encontrada' });
+  }
+  const { queryOne } = getDb();
+  const row = queryOne('SELECT id FROM inscripciones WHERE token_publico = ?', [token]);
+  if (!row) return res.status(404).json({ error: 'Ficha médica no encontrada' });
+  const full = getFullInscripcionById(row.id);
+  delete full.token_publico;
+  res.json(full);
+});
+
+app.post('/api/inscripciones', inscripcionLimiter, (req, res) => {
   const { colonia_id, autorizado, firma_padre_texto, padre = {}, nino = {}, medica = {} } = req.body;
   const { queryOne, runQuery } = getDb();
 
@@ -339,18 +390,14 @@ app.post('/api/inscripciones', (req, res) => {
 
   // Check duplicate DNI
   const dup = queryOne(
-    `SELECT n.dni, n.apellido_nombre, i.nro_ficha, c.nombre as colonia_nombre
-     FROM datos_nino n
-     INNER JOIN inscripciones i ON i.id = n.inscripcion_id
-     LEFT JOIN colonias c ON c.id = i.colonia_id
+    `SELECT n.id FROM datos_nino n
      WHERE REPLACE(REPLACE(n.dni, '.', ''), ' ', '') = ?`,
     [cleanDni]
   );
 
   if (dup) {
     return res.status(409).json({
-      error: `El niño/a ${dup.apellido_nombre} (DNI ${dup.dni}) ya se encuentra inscripto en ${dup.colonia_nombre} (Ficha Nº ${dup.nro_ficha}).`,
-      duplicado: dup
+      error: 'Este niño/a ya se encuentra inscripto. Si necesitás una copia o corregir datos, comunicate con la coordinación.'
     });
   }
 
@@ -360,11 +407,12 @@ app.post('/api/inscripciones', (req, res) => {
   const nro_ficha = `VV-2025-${String(nextNum).padStart(4, '0')}`;
 
   const insResult = runQuery(
-    `INSERT INTO inscripciones (colonia_id, nro_ficha, autorizado, firma_padre_texto, firma_profesional_texto)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO inscripciones (colonia_id, nro_ficha, token_publico, autorizado, firma_padre_texto, firma_profesional_texto)
+     VALUES (?, ?, ?, ?, ?, ?)`,
     [
       Number(colonia_id),
       nro_ficha,
+      crypto.randomBytes(24).toString('hex'),
       autorizado ? 1 : 0,
       firma_padre_texto || padre.apellido_nombre,
       medica.firma_profesional_texto || ''
@@ -462,7 +510,7 @@ app.post('/api/inscripciones', (req, res) => {
   res.status(201).json(creada);
 });
 
-app.put('/api/inscripciones/:id', authMiddleware, (req, res) => {
+app.put('/api/inscripciones/:id', authMiddleware, escribeFichas, (req, res) => {
   const { id } = req.params;
   const { colonia_id, autorizado, firma_padre_texto, firma_profesional_texto, padre = {}, nino = {}, medica = {} } = req.body;
   const { runQuery } = getDb();
@@ -597,7 +645,7 @@ app.put('/api/inscripciones/:id', authMiddleware, (req, res) => {
   res.json(updated);
 });
 
-app.delete('/api/inscripciones/:id', authMiddleware, (req, res) => {
+app.delete('/api/inscripciones/:id', authMiddleware, requireRole('admin'), (req, res) => {
   const { id } = req.params;
   const { runQuery } = getDb();
   runQuery('DELETE FROM datos_padre WHERE inscripcion_id = ?', [id]);
@@ -620,7 +668,7 @@ app.get('/api/alertas', (req, res) => {
   res.json(alertas);
 });
 
-app.post('/api/alertas', authMiddleware, async (req, res) => {
+app.post('/api/alertas', authMiddleware, requireRole('admin'), async (req, res) => {
   const { colonia_id, tipo, titulo, mensaje, suspender_colonia, enviar_email } = req.body;
   const { queryAll, queryOne, runQuery } = getDb();
 
@@ -708,7 +756,7 @@ app.post('/api/alertas', authMiddleware, async (req, res) => {
   });
 });
 
-app.put('/api/alertas/:id/desactivar', authMiddleware, (req, res) => {
+app.put('/api/alertas/:id/desactivar', authMiddleware, requireRole('admin'), (req, res) => {
   const { id } = req.params;
   const { runQuery, queryOne } = getDb();
   const alerta = queryOne('SELECT * FROM alertas WHERE id = ?', [id]);

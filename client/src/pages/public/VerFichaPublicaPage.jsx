@@ -3,20 +3,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import FichaMedicaVerticalView from '../../components/ficha/FichaMedicaVerticalView';
 
 export default function VerFichaPublicaPage() {
-  const { id } = useParams();
+  const { token } = useParams();
   const navigate = useNavigate();
   const [ficha, setFicha] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/inscripciones/${id}`)
+    fetch(`/api/fichas/publica/${encodeURIComponent(token)}`)
       .then((r) => r.json())
       .then((data) => {
         if (data && data.id) setFicha(data);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [token]);
 
   if (loading) {
     return (
@@ -30,7 +30,7 @@ export default function VerFichaPublicaPage() {
     return (
       <div style={{ padding: '48px', textAlign: 'center' }}>
         <h3>Ficha médica no encontrada</h3>
-        <button className="md3-btn md3-btn-filled" style={{ marginTop: '14px' }} onClick={() => navigate('/')}>
+        <button className="md3-btn md3-btn-filled" style={{ marginTop: '14px' }} onClick={() => navigate('/inscripcion')}>
           Ir al Inicio
         </button>
       </div>

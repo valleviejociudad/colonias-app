@@ -93,7 +93,6 @@ export default function FormularioInscripcionPage() {
   // Duplicate DNI state
   const [verificandoDni, setVerificandoDni] = useState(false);
   const [dniExistente, setDniExistente] = useState(null);
-  const [fichaExistenteModal, setFichaExistenteModal] = useState(null);
 
   // Submission state
   const [enviando, setEnviando] = useState(false);
@@ -127,7 +126,7 @@ export default function FormularioInscripcionPage() {
         .then((r) => r.json())
         .then((data) => {
           if (data && data.existe) {
-            setDniExistente(data.datos);
+            setDniExistente(true);
           } else {
             setDniExistente(null);
           }
@@ -168,15 +167,6 @@ export default function FormularioInscripcionPage() {
     }
   }, [nino.peso, nino.talla]);
 
-  const handleVerFichaExistente = async (id) => {
-    try {
-      const res = await fetch(`/api/inscripciones/${id}`);
-      const data = await res.json();
-      if (res.ok) {
-        setFichaExistenteModal(data);
-      }
-    } catch (e) {}
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -184,7 +174,7 @@ export default function FormularioInscripcionPage() {
 
     if (dniExistente) {
       setErrorMsg(
-        `El niño/a con DNI ${nino.dni} ya se encuentra inscripto en ${dniExistente.colonia_nombre} (Ficha ${dniExistente.nro_ficha}).`
+        `El niño/a con DNI ${nino.dni} ya se encuentra inscripto.`
       );
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -266,6 +256,17 @@ export default function FormularioInscripcionPage() {
                 {fichaCreada.nro_ficha}
               </span>
             </p>
+            {fichaCreada.token_publico && (
+              <p style={{ marginTop: '12px', fontSize: '0.9rem', wordBreak: 'break-all' }}>
+                🔒 Guardá este link privado para volver a ver tu ficha:{' '}
+                <a
+                  href={`${window.location.origin}/ficha/${fichaCreada.token_publico}`}
+                  style={{ color: '#ffffff', fontWeight: 700 }}
+                >
+                  {`${window.location.origin}/ficha/${fichaCreada.token_publico}`}
+                </a>
+              </p>
+            )}
             <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
               <button
                 className="md3-btn"
@@ -278,20 +279,6 @@ export default function FormularioInscripcionPage() {
           </motion.div>
 
           <FichaMedicaVerticalView ficha={fichaCreada} showBackButton={false} hideAdminToolbar={true} />
-        </div>
-      </div>
-    );
-  }
-
-  if (fichaExistenteModal) {
-    return (
-      <div className="gf-page-wrapper">
-        <div className="gf-container" style={{ maxWidth: '1160px' }}>
-          <FichaMedicaVerticalView
-            ficha={fichaExistenteModal}
-            onBack={() => setFichaExistenteModal(null)}
-            hideAdminToolbar={true}
-          />
         </div>
       </div>
     );
@@ -442,35 +429,9 @@ export default function FormularioInscripcionPage() {
                         ¡Atención! Este niño/a ya se encuentra inscripto
                       </h4>
                       <p style={{ color: '#451a03', fontSize: '0.9rem', marginTop: '4px' }}>
-                        <strong>{dniExistente.nino_nombre}</strong> (DNI {dniExistente.dni}) ya tiene su ficha médica
-                        cargada en <strong>{dniExistente.colonia_nombre}</strong> ({dniExistente.colonia_turno}).
+                        El DNI <strong>{nino.dni}</strong> ya tiene una ficha médica cargada. Si necesitás una copia o
+                        querés corregir datos, comunicate con la coordinación de las colonias.
                       </p>
-                      <div
-                        style={{
-                          marginTop: '8px',
-                          fontSize: '0.84rem',
-                          color: '#78350f',
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '12px'
-                        }}
-                      >
-                        <span>
-                          <strong>Nº de Ficha:</strong> {dniExistente.nro_ficha}
-                        </span>
-                        <span>
-                          <strong>Inscripto por:</strong> {dniExistente.padre_nombre}
-                        </span>
-                      </div>
-                      <div style={{ marginTop: '12px' }}>
-                        <button
-                          type="button"
-                          className="md3-btn md3-btn-filled"
-                          onClick={() => handleVerFichaExistente(dniExistente.inscripcion_id)}
-                        >
-                          <FileText size={16} /> Ver / Descargar su Ficha Médica
-                        </button>
-                      </div>
                     </div>
                   </div>
                 </motion.div>
