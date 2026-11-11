@@ -293,7 +293,16 @@ app.put('/api/colonias/:id', authMiddleware, requireRole('admin'), (req, res) =>
 
 app.delete('/api/colonias/:id', authMiddleware, requireRole('admin'), (req, res) => {
   const { id } = req.params;
-  const { runQuery } = getDb();
+  const { queryOne, runQuery } = getDb();
+  const insActivas = queryOne(
+    "SELECT COUNT(*) as total FROM inscripciones WHERE colonia_id = ? AND estado = 'activo'",
+    [id]
+  );
+  if (insActivas && insActivas.total > 0) {
+    return res.status(409).json({
+      error: `No se puede eliminar: la localidad tiene ${insActivas.total} inscripción/es activa/s. Pasalas a otra localidad antes de eliminarla.`
+    });
+  }
   runQuery('DELETE FROM colonias WHERE id = ?', [id]);
   res.json({ ok: true });
 });
@@ -401,11 +410,22 @@ app.post('/api/inscripciones', inscripcionLimiter, (req, res) => {
     });
   }
 
-  // Generate sequential ficha number
-  const lastRow = queryOne('SELECT MAX(id) as maxId FROM inscripciones');
-  const nextNum = ((lastRow && lastRow.maxId) ? lastRow.maxId : 0) + 1;
-  const nro_ficha = `VV-2025-${String(nextNum).padStart(4, '0')}`;
+  // Número de ficha: correlativo dentro de la temporada activa
+  const temporada = Number(process.env.TEMPORADA_ACTUAL) || new Date().getFullYear();
+  const prefijo = `VV-${temporada}-`;
+  const lastFicha = queryOne(
+    'SELECT nro_ficha FROM inscripciones WHERE nro_ficha LIKE ? ORDER BY id DESC LIMIT 1',
+    [prefijo + '%']
+  );
+  const ultimoNum = lastFicha
+    ? Number(lastFicha.nro_ficha.replace(prefijo, '')) || 0
+    : 0;
+  const nro_ficha = prefijo + String(ultimoNum + 1).padStart(4, '0');
 
+  const { transaction } = getDb();
+  let creada;
+  try {
+    creada = transaction(() => {
   const insResult = runQuery(
     `INSERT INTO inscripciones (colonia_id, nro_ficha, token_publico, autorizado, firma_padre_texto, firma_profesional_texto)
      VALUES (?, ?, ?, ?, ?, ?)`,
@@ -506,7 +526,12 @@ app.post('/api/inscripciones', inscripcionLimiter, (req, res) => {
     ]
   );
 
-  const creada = getFullInscripcionById(inscripcionId);
+      return getFullInscripcionById(inscripcionId);
+    });
+  } catch (err) {
+    console.error('Error al crear inscripción:', err.message);
+    return res.status(500).json({ error: 'Error interno al guardar la inscripción. Intentá de nuevo.' });
+  }
   res.status(201).json(creada);
 });
 
@@ -647,12 +672,20 @@ app.put('/api/inscripciones/:id', authMiddleware, escribeFichas, (req, res) => {
 
 app.delete('/api/inscripciones/:id', authMiddleware, requireRole('admin'), (req, res) => {
   const { id } = req.params;
-  const { runQuery } = getDb();
-  runQuery('DELETE FROM datos_padre WHERE inscripcion_id = ?', [id]);
-  runQuery('DELETE FROM datos_nino WHERE inscripcion_id = ?', [id]);
-  runQuery('DELETE FROM ficha_medica WHERE inscripcion_id = ?', [id]);
-  runQuery('DELETE FROM inscripciones WHERE id = ?', [id]);
-  res.json({ ok: true });
+  const { runQuery, transaction } = getDb();
+  try {
+    transaction(() => {
+      // Con PRAGMA foreign_keys = ON los CASCADE borran las tablas hijas automáticamente.
+      // Estos deletes manuales son el fallback por si la migración todavía no activó FK.
+      runQuery('DELETE FROM datos_padre WHERE inscripcion_id = ?', [id]);
+      runQuery('DELETE FROM datos_nino WHERE inscripcion_id = ?', [id]);
+      runQuery('DELETE FROM ficha_medica WHERE inscripcion_id = ?', [id]);
+      runQuery('DELETE FROM inscripciones WHERE id = ?', [id]);
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudo eliminar la ficha.' });
+  }
 });
 
 // ==================== ALERTAS Y DIFUSIÓN (CLIMA / SUSPENSIONES) ====================

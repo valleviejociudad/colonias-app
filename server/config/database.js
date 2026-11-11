@@ -16,7 +16,24 @@ function saveDatabase() {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  fs.writeFileSync(DB_PATH, buffer);
+  // Escritura atómica: escribe en temporal y renombra, evita corrupción si el proceso se corta
+  const tmp = DB_PATH + '.tmp';
+  fs.writeFileSync(tmp, buffer);
+  fs.renameSync(tmp, DB_PATH);
+}
+
+// Ejecuta fn dentro de una transacción SQLite. Si lanza, hace ROLLBACK y re-lanza.
+function transaction(fn) {
+  dbInstance.run('BEGIN');
+  try {
+    const result = fn();
+    dbInstance.run('COMMIT');
+    saveDatabase();
+    return result;
+  } catch (err) {
+    try { dbInstance.run('ROLLBACK'); } catch (_) {}
+    throw err;
+  }
 }
 
 // Helper methods to query sql.js cleanly
@@ -39,8 +56,15 @@ function queryOne(sql, params = []) {
 function runQuery(sql, params = []) {
   dbInstance.run(sql, params);
   const res = queryOne('SELECT last_insert_rowid() as id');
-  saveDatabase();
+  // saveDatabase() se llama desde transaction() o explícitamente. No guardar en cada runQuery
+  // para evitar escrituras repetidas; los callers que no usan transaction llaman saveDatabase() ellos.
   return { lastInsertRowid: res ? res.id : null };
+}
+
+function runQueryAndSave(sql, params = []) {
+  const result = runQuery(sql, params);
+  saveDatabase();
+  return result;
 }
 
 async function initDatabase() {
@@ -58,6 +82,10 @@ async function initDatabase() {
   } else {
     dbInstance = new SQL.Database();
   }
+
+  // Claves foráneas y WAL para mejor rendimiento y consistencia
+  dbInstance.run('PRAGMA foreign_keys = ON');
+  dbInstance.run('PRAGMA journal_mode = MEMORY');
 
   // Create tables
   dbInstance.run(`
@@ -79,7 +107,7 @@ async function initDatabase() {
       direccion TEXT NOT NULL,
       descripcion TEXT,
       turno TEXT DEFAULT 'Mañana (08:30 a 12:30 hs)',
-      edades TEXT DEFAULT '6 a 13 años',
+      edades TEXT DEFAULT '5 a 13 años',
       coordinador_responsable TEXT,
       telefono_sede TEXT,
       fecha_inicio TEXT,
@@ -235,19 +263,16 @@ async function initDatabase() {
     const adminPassword = String(process.env.ADMIN_PASSWORD || '');
 
     if (adminEmail && adminPassword.length >= 8) {
-      runQuery(
-        'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
+      runQueryAndSave('INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
         ['Administrador', adminEmail, bcrypt.hashSync(adminPassword, 10), 'admin']
       );
       console.log(`✅ Usuario administrador inicial creado: ${adminEmail}`);
     } else if (!IS_PROD) {
       // Solo desarrollo local: usuarios de prueba
-      runQuery(
-        'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
+      runQueryAndSave('INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
         ['Subsecretaría de Deportes (Admin)', 'admin@valleviejo.gob.ar', bcrypt.hashSync('admin123', 10), 'admin']
       );
-      runQuery(
-        'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
+      runQueryAndSave('INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
         ['Coordinación General Colonias', 'coordinador@valleviejo.gob.ar', bcrypt.hashSync('coord123', 10), 'coordinador']
       );
       console.warn('⚠️  Modo desarrollo: usuarios de prueba creados (admin123 / coord123). No usar en producción.');
@@ -276,8 +301,8 @@ async function initDatabase() {
         '5 a 13 años',
         'Coordinación Subsecretaría de Deportes',
         '3834551234',
-        '2025-01-06',
-        '2025-02-21'
+        (new Date().getFullYear()).toString() + '-01-06',
+        (new Date().getFullYear()).toString() + '-02-21'
       ],
       [
         'SUM de Las Tejas',
@@ -288,14 +313,13 @@ async function initDatabase() {
         '5 a 13 años',
         'Coordinación Subsecretaría de Deportes',
         '3834667890',
-        '2025-01-06',
-        '2025-02-21'
+        (new Date().getFullYear()).toString() + '-01-06',
+        (new Date().getFullYear()).toString() + '-02-21'
       ]
     ];
 
     for (const c of coloniasSeed) {
-      runQuery(
-        `INSERT INTO colonias (nombre, sede, direccion, descripcion, turno, edades, coordinador_responsable, telefono_sede, fecha_inicio, fecha_fin)
+      runQueryAndSave(`INSERT INTO colonias (nombre, sede, direccion, descripcion, turno, edades, coordinador_responsable, telefono_sede, fecha_inicio, fecha_fin)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         c
       );
@@ -308,6 +332,7 @@ async function initDatabase() {
   const sinToken = queryAll('SELECT id FROM inscripciones WHERE token_publico IS NULL OR token_publico = ""');
   for (const row of sinToken) {
     dbInstance.run('UPDATE inscripciones SET token_publico = ? WHERE id = ?', [crypto.randomBytes(24).toString('hex'), row.id]);
+    saveDatabase();
   }
 
   saveDatabase();
@@ -521,5 +546,5 @@ function seedSampleInscripciones() {
 
 module.exports = {
   initDatabase,
-  getDb: () => ({ queryAll, queryOne, runQuery, saveDatabase })
+  getDb: () => ({ queryAll, queryOne, runQuery, runQueryAndSave, saveDatabase, transaction })
 };
