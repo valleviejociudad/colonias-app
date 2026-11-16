@@ -19,6 +19,7 @@ import {
   Plus
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { API_BASE } from '../../config';
 
 const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic'];
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
@@ -216,7 +217,7 @@ export default function GaleriaPanel({ colonias = [], isMobileView = false }) {
 
   const cargarAlbumes = useCallback(async () => {
     try {
-      const res = await authFetch('/api/galeria/albumes');
+      const res = await authFetch(`${API_BASE}/galeria/albumes`);
       if (res.status === 503) {
         setNotConfigured(true);
         return;
@@ -249,7 +250,7 @@ export default function GaleriaPanel({ colonias = [], isMobileView = false }) {
           params.set('colonia_id', String(selectedColonia));
         }
 
-        const res = await authFetch(`/api/galeria?${params.toString()}`);
+        const res = await authFetch(`${API_BASE}/galeria?${params.toString()}`);
         if (res.status === 503) {
           const errData = await res.json().catch(() => ({}));
           setNotConfigured(true);
@@ -400,7 +401,7 @@ export default function GaleriaPanel({ colonias = [], isMobileView = false }) {
         const readyFile = await compressImageIfNeeded(item.file);
 
         // 2. Solicitar firma al backend
-        const signRes = await authFetch('/api/galeria/firma', { method: 'POST' });
+        const signRes = await authFetch(`${API_BASE}/galeria/firma`, { method: 'POST' });
         const signData = await signRes.json().catch(() => ({}));
         if (!signRes.ok) {
           throw new Error(signData.error || 'No se pudo obtener autorización de subida');
@@ -412,7 +413,7 @@ export default function GaleriaPanel({ colonias = [], isMobileView = false }) {
         });
 
         // 4. Registrar metadatos verificados en nuestro backend
-        const saveRes = await authFetch('/api/galeria', {
+        const saveRes = await authFetch(`${API_BASE}/galeria`, {
           method: 'POST',
           body: JSON.stringify({
             public_id: cloudRes.public_id,
@@ -465,7 +466,7 @@ export default function GaleriaPanel({ colonias = [], isMobileView = false }) {
     setSavingAlbum(true);
     try {
       const isEdit = albumModal.mode === 'edit';
-      const url = isEdit ? `/api/galeria/albumes/${albumModal.id}` : '/api/galeria/albumes';
+      const url = isEdit ? `${API_BASE}/galeria/albumes/${albumModal.id}` : `${API_BASE}/galeria/albumes`;
       const method = isEdit ? 'PUT' : 'POST';
 
       const res = await authFetch(url, {
@@ -499,7 +500,7 @@ export default function GaleriaPanel({ colonias = [], isMobileView = false }) {
       return;
     }
     try {
-      const res = await authFetch(`/api/galeria/albumes/${album.id}`, { method: 'DELETE' });
+      const res = await authFetch(`${API_BASE}/galeria/albumes/${album.id}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'No se pudo eliminar el álbum');
 
@@ -517,7 +518,7 @@ export default function GaleriaPanel({ colonias = [], isMobileView = false }) {
 
     setSavingPhoto(true);
     try {
-      const res = await authFetch(`/api/galeria/${editingPhoto.id}`, {
+      const res = await authFetch(`${API_BASE}/galeria/${editingPhoto.id}`, {
         method: 'PUT',
         body: JSON.stringify({
           titulo: editingPhoto.titulo,
@@ -544,7 +545,7 @@ export default function GaleriaPanel({ colonias = [], isMobileView = false }) {
     if (deletingPhoto) return;
     setDeletingPhoto(true);
     try {
-      const res = await authFetch(`/api/galeria/${photo.id}`, { method: 'DELETE' });
+      const res = await authFetch(`${API_BASE}/galeria/${photo.id}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'No se pudo borrar la imagen');
 

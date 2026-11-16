@@ -1,6 +1,7 @@
 import React from 'react';
+import { asset } from '../../config';
 
-export default function HeaderValleViejo({ compact = false, showTemporada = true, nroFicha = null, fecha = null, logoDeporteSrc = '/logodeporte.png' }) {
+export default function HeaderValleViejo({ compact = false, showTemporada = true, nroFicha = null, fecha = null, logoDeporteSrc = asset('logodeporte.png') }) {
   return (
     <div
       style={{
@@ -49,7 +50,7 @@ export default function HeaderValleViejo({ compact = false, showTemporada = true
           }}
         >
           <img
-            src="/logovalleviejociudad.png"
+            src={asset('logovalleviejociudad.png')}
             alt="Valle Viejo Ciudad"
             style={{
               height: compact ? '34px' : '42px',

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff, Loader2, LogIn, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { asset } from '../../config';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -33,9 +34,9 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="gf-water login-water">
         <div className="gf-water-logos">
-          <span className="logo-chip"><img src="/logodeporte.png" alt="Deporte Valle Viejo" /></span>
+          <span className="logo-chip"><img src={asset('logodeporte.png')} alt="Deporte Valle Viejo" /></span>
           <span className="logo-chip">
-            <img src="/logovalleviejociudad.png" alt="Municipalidad de Valle Viejo" />
+            <img src={asset('logovalleviejociudad.png')} alt="Municipalidad de Valle Viejo" />
           </span>
         </div>
       </div>
@@ -46,7 +47,7 @@ export default function LoginPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.23, 1, 0.32, 1] }}
       >
-        <img src="/logocolonias.png" alt="Colonias de Verano" className="login-logo" />
+        <img src={asset('logocolonias.png')} alt="Colonias de Verano" className="login-logo" />
         <h1 style={{ fontSize: '1.6rem', fontWeight: 800, textAlign: 'center' }}>Panel de coordinación</h1>
         <p style={{ textAlign: 'center', color: 'var(--ink-2)', marginTop: 6 }}>
           Ingresá con tu correo y contraseña municipal.

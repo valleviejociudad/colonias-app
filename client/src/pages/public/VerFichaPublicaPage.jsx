@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { FileQuestion } from 'lucide-react';
 import FichaMedicaVerticalView from '../../components/ficha/FichaMedicaVerticalView';
 import ComunidadWhatsAppCard from '../../components/ui/ComunidadWhatsAppCard';
+import { API_BASE, asset } from '../../config';
 
 export default function VerFichaPublicaPage() {
   const { token } = useParams();
@@ -11,7 +12,7 @@ export default function VerFichaPublicaPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/fichas/publica/${encodeURIComponent(token)}`)
+    fetch(`${API_BASE}/fichas/publica/${encodeURIComponent(token)}`)
       .then((r) => r.json())
       .then((data) => {
         if (data && data.id) setFicha(data);
@@ -24,9 +25,9 @@ export default function VerFichaPublicaPage() {
     <div className="gf-page-wrapper">
       <div className="gf-water no-print">
         <div className="gf-water-logos">
-          <span className="logo-chip"><img src="/logodeporte.png" alt="Deporte Valle Viejo" /></span>
+          <span className="logo-chip"><img src={asset('logodeporte.png')} alt="Deporte Valle Viejo" /></span>
           <span className="logo-chip">
-            <img src="/logovalleviejociudad.png" alt="Municipalidad de Valle Viejo" />
+            <img src={asset('logovalleviejociudad.png')} alt="Municipalidad de Valle Viejo" />
           </span>
         </div>
       </div>

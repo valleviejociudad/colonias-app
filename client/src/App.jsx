@@ -5,6 +5,7 @@ import FormularioInscripcionPage from './pages/public/FormularioInscripcionPage'
 import VerFichaPublicaPage from './pages/public/VerFichaPublicaPage';
 import LoginPage from './pages/auth/LoginPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import { BASE_PATH } from './config';
 
 function ProtectedRoute({ children }) {
   const { user, token } = useAuth();
@@ -17,7 +18,7 @@ function ProtectedRoute({ children }) {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={BASE_PATH}>
         <Routes>
           <Route path="/" element={<Navigate to="/admin" replace />} />
           <Route path="/inscripcion" element={<FormularioInscripcionPage />} />

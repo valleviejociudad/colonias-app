@@ -19,6 +19,7 @@ import FichaMedicaVerticalView from '../../components/ficha/FichaMedicaVerticalV
 import LaneRope from '../../components/ui/LaneRope';
 import ComunidadWhatsAppCard from '../../components/ui/ComunidadWhatsAppCard';
 import { normalizarCelular, MSG_CELULAR } from '../../utils/celular';
+import { API_BASE, BASE_PATH, asset } from '../../config';
 
 const PATOLOGIAS_FORM = [
   { key: 'alergias', label: 'Alergias', hint: 'medicamentos, insectos, alimentos, polen' },
@@ -185,7 +186,7 @@ export default function FormularioInscripcionPage() {
   const [linkCopiado, setLinkCopiado] = useState(false);
 
   useEffect(() => {
-    fetch('/api/colonias')
+    fetch(`${API_BASE}/colonias`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -207,7 +208,7 @@ export default function FormularioInscripcionPage() {
     }
     const timer = setTimeout(() => {
       setVerificandoDni(true);
-      fetch(`/api/inscripciones/verificar-dni/${clean}`)
+      fetch(`${API_BASE}/inscripciones/verificar-dni/${clean}`)
         .then((r) => r.json())
         .then((data) => setDniExistente(data && data.existe ? true : null))
         .catch(() => {})
@@ -353,7 +354,7 @@ export default function FormularioInscripcionPage() {
         medica: medicaPayload
       };
 
-      const res = await fetch('/api/inscripciones', {
+      const res = await fetch(`${API_BASE}/inscripciones`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -375,7 +376,7 @@ export default function FormularioInscripcionPage() {
   };
 
   const linkPrivado = fichaCreada?.token_publico
-    ? `${window.location.origin}/ficha/${fichaCreada.token_publico}`
+    ? `${window.location.origin}${BASE_PATH}/ficha/${fichaCreada.token_publico}`
     : '';
 
   const copiarLink = async () => {
@@ -1218,9 +1219,9 @@ function NumeroCorto({ id, label, value, onChange, step }) {
 function WaterLogos() {
   return (
     <div className="gf-water-logos">
-      <span className="logo-chip"><img src="/logodeporte.png" alt="Deporte Valle Viejo" /></span>
+      <span className="logo-chip"><img src={asset('logodeporte.png')} alt="Deporte Valle Viejo" /></span>
       <span className="logo-chip">
-        <img src="/logovalleviejociudad.png" alt="Municipalidad de Valle Viejo" />
+        <img src={asset('logovalleviejociudad.png')} alt="Municipalidad de Valle Viejo" />
       </span>
     </div>
   );

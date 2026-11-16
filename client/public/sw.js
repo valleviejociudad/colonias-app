@@ -1,12 +1,8 @@
-const CACHE_NAME = 'colonias-vv-v19';
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.ico',
-  '/favicon-32.png',
-  '/icon-192.png'
-];
+const CACHE_NAME = 'colonias-vv-v20';
+// El SW vive en /colonias/sw.js, así que su scope es /colonias/. Todo se resuelve contra el scope.
+const SCOPE = self.registration.scope;
+const STATIC_ASSETS = ['', 'index.html', 'manifest.json', 'favicon.ico', 'favicon-32.png', 'icon-192.png']
+  .map((p) => SCOPE + p);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -30,7 +26,7 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const reqUrl = new URL(event.request.url);
-  if (reqUrl.pathname.startsWith('/api/') || reqUrl.hostname.includes('cloudinary.com')) {
+  if (reqUrl.pathname.includes('/api/') || reqUrl.hostname.includes('cloudinary.com')) {
     return;
   }
 
@@ -43,6 +39,6 @@ self.addEventListener('fetch', (event) => {
         });
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match(SCOPE + 'index.html')))
   );
 });

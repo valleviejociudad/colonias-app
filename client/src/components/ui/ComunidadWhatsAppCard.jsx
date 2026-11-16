@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { MessageCircle, Users } from 'lucide-react';
+import { API_BASE } from '../../config';
 
 // Invitación a la Comunidad de WhatsApp de las colonias. No muestra nada si el link no está cargado.
 export default function ComunidadWhatsAppCard({ className = '', style }) {
@@ -7,7 +8,7 @@ export default function ComunidadWhatsAppCard({ className = '', style }) {
 
   useEffect(() => {
     let vivo = true;
-    fetch('/api/comunidad')
+    fetch(`${API_BASE}/comunidad`)
       .then((r) => r.json())
       .then((d) => {
         if (vivo && d && d.link) setLink(d.link);

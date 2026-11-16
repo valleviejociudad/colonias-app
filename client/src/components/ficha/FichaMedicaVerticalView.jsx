@@ -3,6 +3,7 @@ import { Phone, MessageCircle, Printer, Download, ArrowLeft } from 'lucide-react
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import HeaderValleViejo from '../ui/HeaderValleViejo';
+import { asset } from '../../config';
 
 const PATOLOGIAS_LIST = [
   { key: 'alergias', label: 'Alergias:' },
@@ -632,7 +633,7 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
             compact={true}
             nroFicha={ficha.nro_ficha}
             fecha={(ficha.fecha_inscripcion || '').slice(0, 10)}
-            logoDeporteSrc="/logodeportefichamedica.png"
+            logoDeporteSrc={asset('logodeportefichamedica.png')}
           />
 
           <SedeBar />
@@ -667,7 +668,7 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
               compact={true}
               nroFicha={ficha.nro_ficha}
               fecha={(ficha.fecha_inscripcion || '').slice(0, 10)}
-              logoDeporteSrc="/logodeportefichamedica.png"
+              logoDeporteSrc={asset('logodeportefichamedica.png')}
             />
 
             <SedeBar />

@@ -26,6 +26,7 @@ import FichaMedicaVerticalView from '../../components/ficha/FichaMedicaVerticalV
 import EstadisticasPanel from '../../components/stats/EstadisticasPanel';
 import GaleriaPanel from '../../components/galeria/GaleriaPanel';
 import AvisosClimaPanel from '../../components/clima/AvisosClimaPanel';
+import { API_BASE, asset } from '../../config';
 
 const PATOLOGIAS_KEYS = [
   { key: 'alergias', label: 'Alergia' },
@@ -92,9 +93,9 @@ export default function AdminDashboardPage() {
     setLoading(true);
     try {
       const [resIns, resCol, resAle] = await Promise.all([
-        authFetch('/api/inscripciones'),
-        authFetch('/api/colonias'),
-        authFetch('/api/alertas')
+        authFetch(`${API_BASE}/inscripciones`),
+        authFetch(`${API_BASE}/colonias`),
+        authFetch(`${API_BASE}/alertas`)
       ]);
 
       if (resIns.status === 401) {
@@ -171,7 +172,7 @@ export default function AdminDashboardPage() {
     if (!window.confirm(`¿Seguro que querés eliminar la ficha de ${nombre}? Esto no se puede deshacer.`)) return;
     try {
       setErrorOperacion(null);
-      const res = await authFetch(`/api/inscripciones/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`${API_BASE}/inscripciones/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setErrorOperacion(data.error || `No se pudo eliminar la ficha de ${nombre}.`);
@@ -192,7 +193,7 @@ export default function AdminDashboardPage() {
     if (!editModalFicha) return;
     setErrorOperacion(null);
     try {
-      const res = await authFetch(`/api/inscripciones/${editModalFicha.id}`, {
+      const res = await authFetch(`${API_BASE}/inscripciones/${editModalFicha.id}`, {
         method: 'PUT',
         body: JSON.stringify({
           firma_profesional_texto: editModalFicha.firma_profesional_texto,
@@ -270,7 +271,7 @@ export default function AdminDashboardPage() {
       <aside className="app-navigation-rail no-print">
         <div className="app-nav-header">
           <div className="logo-plate">
-            <img src="/logocolonias.png" alt="Colonias de Verano" style={{ height: 52, width: 'auto', display: 'block' }} />
+            <img src={asset('logocolonias.png')} alt="Colonias de Verano" style={{ height: 52, width: 'auto', display: 'block' }} />
           </div>
         </div>
 
@@ -348,7 +349,7 @@ export default function AdminDashboardPage() {
             <>
               <div className="logo-row">
                 <span className="plate">
-                  <img src="/logocolonias.png" alt="Colonias de Verano" style={{ height: 32, width: 'auto', display: 'block' }} />
+                  <img src={asset('logocolonias.png')} alt="Colonias de Verano" style={{ height: 32, width: 'auto', display: 'block' }} />
                 </span>
               </div>
               <div style={{ textAlign: 'right', minWidth: 0 }}>
@@ -379,10 +380,10 @@ export default function AdminDashboardPage() {
               </div>
               <div className="logo-row">
                 <span className="plate">
-                  <img src="/logodeporte.png" alt="Deporte Valle Viejo" style={{ height: 30, width: 'auto', display: 'block' }} />
+                  <img src={asset('logodeporte.png')} alt="Deporte Valle Viejo" style={{ height: 30, width: 'auto', display: 'block' }} />
                 </span>
                 <span className="plate">
-                  <img src="/logovalleviejociudad.png" alt="Municipalidad de Valle Viejo" style={{ height: 30, width: 'auto', display: 'block' }} />
+                  <img src={asset('logovalleviejociudad.png')} alt="Municipalidad de Valle Viejo" style={{ height: 30, width: 'auto', display: 'block' }} />
                 </span>
               </div>
             </>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { CloudLightning, Info, X } from 'lucide-react';
+import { API_BASE } from '../../config';
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -28,7 +29,7 @@ export default function AlertaClimaticaBanner({ refreshTrigger = 0 }) {
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    fetch('/api/alertas')
+    fetch(`${API_BASE}/alertas`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setAlertas(data.filter((a) => a.activa === 1));

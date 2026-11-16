@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { API_BASE } from '../../config';
 import {
   AlertCircle,
   ArrowLeft,
@@ -486,7 +487,7 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
   const [comunidadLink, setComunidadLink] = useState(null);
 
   useEffect(() => {
-    fetch('/api/comunidad')
+    fetch(`${API_BASE}/comunidad`)
       .then((r) => r.json())
       .then((d) => setComunidadLink(d?.link || null))
       .catch(() => {});
@@ -495,7 +496,7 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
   // Devuelve el texto del error, o null si se guardó
   const guardarComunidad = async (link) => {
     try {
-      const res = await authFetch('/api/comunidad', { method: 'PUT', body: JSON.stringify({ link }) });
+      const res = await authFetch(`${API_BASE}/comunidad`, { method: 'PUT', body: JSON.stringify({ link }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return data.error || 'No se pudo guardar el link. Probá de nuevo.';
       setComunidadLink(data.link || null);
@@ -586,7 +587,7 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
     setCargando(true);
     try {
       const q = sonTodas ? '' : `?colonia_ids=${encodeURIComponent(form.colonias.join(','))}`;
-      const res = await authFetch(`/api/alertas/destinatarios${q}`);
+      const res = await authFetch(`${API_BASE}/alertas/destinatarios${q}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || 'No pudimos contar las familias. Probá de nuevo.');
@@ -605,7 +606,7 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
     setError(null);
     setCargando(true);
     try {
-      const res = await authFetch('/api/alertas', {
+      const res = await authFetch(`${API_BASE}/alertas`, {
         method: 'POST',
         body: JSON.stringify({
           ...form,
@@ -641,7 +642,7 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
     setOkLevantado(null);
     setLevantando(alerta.id);
     try {
-      const res = await authFetch(`/api/alertas/${alerta.id}/desactivar`, { method: 'PUT' });
+      const res = await authFetch(`${API_BASE}/alertas/${alerta.id}/desactivar`, { method: 'PUT' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || 'No se pudo levantar el aviso. Probá de nuevo.');
@@ -669,7 +670,7 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
     }
     setListas((p) => ({ ...p, [alertaId]: { cargando: true } }));
     try {
-      const res = await authFetch(`/api/alertas/${alertaId}/whatsapp`);
+      const res = await authFetch(`${API_BASE}/alertas/${alertaId}/whatsapp`);
       const data = await res.json().catch(() => ({}));
       setListas((p) => ({
         ...p,
