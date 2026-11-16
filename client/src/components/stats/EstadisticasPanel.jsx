@@ -1,45 +1,24 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Users,
-  HeartPulse,
-  ShieldCheck,
-  Stethoscope,
-  Syringe,
-  FileCheck2,
-  MapPin,
-  Activity,
-  PieChart as PieChartIcon,
-  Table2,
-  UserCheck
-} from 'lucide-react';
+import { Check, ChevronDown, BarChart3 } from 'lucide-react';
 
 const PATOLOGIAS_META = [
   { key: 'alergias', label: 'Alergias' },
-  { key: 'asmas', label: 'Asma / Broncoespasmo' },
-  { key: 'oftalmologicas', label: 'Oftalmológicas' },
-  { key: 'celiaquia', label: 'Celiaquía (Sin TACC)' },
+  { key: 'asmas', label: 'Asma o broncoespasmo' },
+  { key: 'oftalmologicas', label: 'Problemas de la vista' },
+  { key: 'celiaquia', label: 'Celiaquía (sin TACC)' },
   { key: 'discapacidad', label: 'Discapacidad' },
-  { key: 'cardiacas', label: 'Cardíacas' },
+  { key: 'cardiacas', label: 'Problemas del corazón' },
   { key: 'diabetes', label: 'Diabetes' },
-  { key: 'neurologicas', label: 'Neurológicas' },
-  { key: 'auditivas', label: 'Auditivas' },
-  { key: 'rinones', label: 'Renales / Riñones' },
+  { key: 'neurologicas', label: 'Problemas neurológicos' },
+  { key: 'auditivas', label: 'Problemas de audición' },
+  { key: 'rinones', label: 'Problemas de riñón' },
   { key: 'tiroides', label: 'Tiroides' },
   { key: 'oncologicas', label: 'Oncológicas' },
   { key: 'otras', label: 'Otras condiciones' }
 ];
 
-const CHART_PALETTE = [
-  '#006494',
-  '#0082a8',
-  '#006c4c',
-  '#d97706',
-  '#7c3aed',
-  '#db2777',
-  '#475569'
-];
-
 const pct = (part, total) => (total > 0 ? Math.round((part / total) * 100) : 0);
+const plural = (n, uno, varios) => (n === 1 ? uno : varios);
 
 function parseNumber(val) {
   if (val === null || val === undefined || val === '') return null;
@@ -48,200 +27,94 @@ function parseNumber(val) {
   return Number.isFinite(num) && num > 0 ? num : null;
 }
 
+const tieneFirma = (i) => Boolean(String(i.firma_profesional_texto || '').trim());
+const tieneMedidas = (i) =>
+  Boolean(
+    parseNumber(i.peso) ||
+      parseNumber(i.talla) ||
+      String(i.presion_arterial || i.presion_alta || i.presion_baja || '').trim()
+  );
+
 /**
- * Gráfico Circular (Donut SVG) nítido y adaptable para Mobile y Desktop
+ * Clasifica lo que la familia declaró sobre las vacunas.
+ * El formulario guarda exactamente: "Completo según Calendario Nacional",
+ * "En curso / Pendiente refuerzo" o "Incompleto". Un campo vacío es "sin dato",
+ * nunca "al día".
  */
-function DonutChartCard({ title, subtitle, centerValue, centerLabel, segments, isMobile }) {
-  const size = isMobile ? 116 : 132;
-  const strokeWidth = isMobile ? 15 : 17;
-  const center = size / 2;
-  const radius = center - strokeWidth / 2 - 2;
-  const circumference = 2 * Math.PI * radius;
+function estadoVacunas(valor) {
+  const s = String(valor || '').trim().toLowerCase();
+  if (!s) return 'sin_dato';
+  if (s.includes('incomplet')) return 'incompleto';
+  if (/curso|pendiente|falta|refuerzo/.test(s)) return 'en_curso';
+  if (/^complet/.test(s) || s.includes('al día') || s.includes('al dia')) return 'completo';
+  return 'sin_dato';
+}
 
-  const activeSegments = segments.filter((s) => s.value > 0);
-  const total = activeSegments.reduce((acc, s) => acc + s.value, 0);
-  const gapPx = activeSegments.length > 1 ? 2.2 : 0;
+// Rangos sin huecos: una edad de 7,5 años cae en "8 a 10" solo si es ≥ 8.
+const RANGOS_EDAD = [
+  { label: 'Hasta 7 años', test: (e) => e < 8 },
+  { label: '8 a 10 años', test: (e) => e >= 8 && e < 11 },
+  { label: '11 a 13 años', test: (e) => e >= 11 && e < 14 },
+  { label: '14 años o más', test: (e) => e >= 14 }
+];
 
-  let accumulated = 0;
-
+function NombreBoton({ ficha, detalle, onSelectFicha }) {
   return (
-    <div
-      className="gf-card"
-      style={{
-        padding: isMobile ? '16px 14px' : '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '14px'
-      }}
-    >
-      <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '0.74rem',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            color: 'var(--md-sys-color-primary)'
-          }}
-        >
-          <PieChartIcon size={14} />
-          <span>{subtitle}</span>
-        </div>
-        <h3
-          className="font-display"
-          style={{
-            fontSize: isMobile ? '1.02rem' : '1.08rem',
-            fontWeight: 800,
-            color: 'var(--md-sys-color-on-surface)',
-            marginTop: '2px'
-          }}
-        >
-          {title}
-        </h3>
-      </div>
+    <button type="button" className="name-btn" onClick={() => onSelectFicha && onSelectFicha(ficha)}>
+      <strong>{ficha.nino_nombre || 'Sin nombre'}</strong>
+      {detalle && <span>{detalle}</span>}
+    </button>
+  );
+}
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: isMobile ? '14px' : '18px',
-          flexWrap: 'nowrap'
-        }}
-      >
-        {/* SVG Donut */}
-        <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-            <circle
-              cx={center}
-              cy={center}
-              r={radius}
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth={strokeWidth}
-            />
-            {total > 0 && (
-              <g transform={`rotate(-90 ${center} ${center})`}>
-                {activeSegments.map((seg, idx) => {
-                  const rawLen = (seg.value / total) * circumference;
-                  const visibleLen = Math.max(0, rawLen - gapPx);
-                  const offset = -accumulated;
-                  accumulated += rawLen;
-                  return (
-                    <circle
-                      key={idx}
-                      cx={center}
-                      cy={center}
-                      r={radius}
-                      fill="none"
-                      stroke={seg.color}
-                      strokeWidth={strokeWidth}
-                      strokeDasharray={`${visibleLen} ${circumference}`}
-                      strokeDashoffset={offset}
-                      strokeLinecap="butt"
-                    />
-                  );
-                })}
-              </g>
-            )}
-          </svg>
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textAlign: 'center',
-              padding: '0 10px',
-              pointerEvents: 'none'
-            }}
-          >
-            <span
-              className="font-display"
-              style={{
-                fontSize: isMobile ? '1.15rem' : '1.28rem',
-                fontWeight: 800,
-                lineHeight: 1.05,
-                color: 'var(--md-sys-color-on-surface)'
-              }}
+function ListaBarras({ items, total }) {
+  return (
+    <ul className="bar-list">
+      {items.map((it) => {
+        const p = pct(it.value, total);
+        return (
+          <li key={it.label}>
+            <div className="bar-label">
+              <span>{it.label}</span>
+              <b>
+                {it.value}
+                <span>({p}%)</span>
+              </b>
+            </div>
+            <div
+              className="bar-track"
+              role="img"
+              aria-label={`${it.label}: ${it.value} de ${total} (${p}%)`}
             >
-              {centerValue}
-            </span>
-            <span
-              style={{
-                fontSize: '0.66rem',
-                fontWeight: 600,
-                color: 'var(--md-sys-color-on-surface-variant)',
-                marginTop: '2px',
-                lineHeight: 1.15
-              }}
-            >
-              {centerLabel}
-            </span>
-          </div>
-        </div>
+              <div className={`bar-fill ${it.muted ? 'is-muted' : ''}`} style={{ width: `${p}%` }} />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
-        {/* Legend */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '7px' }}>
-          {segments.map((seg, idx) => {
-            const p = pct(seg.value, total || 1);
-            return (
-              <div
-                key={idx}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '8px',
-                  fontSize: isMobile ? '0.79rem' : '0.82rem'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
-                  <span
-                    style={{
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '3px',
-                      background: seg.color,
-                      flexShrink: 0
-                    }}
-                  />
-                  <span
-                    style={{
-                      color: 'var(--md-sys-color-on-surface)',
-                      fontWeight: 500,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}
-                    title={seg.label}
-                  >
-                    {seg.label}
-                  </span>
-                </div>
-                <span
-                  style={{
-                    fontWeight: 800,
-                    color: 'var(--md-sys-color-on-surface)',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0
-                  }}
-                >
-                  {seg.value}{' '}
-                  <span style={{ fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)', fontSize: '0.73rem' }}>
-                    ({total > 0 ? p : 0}%)
-                  </span>
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+/** En PC es una tarjeta abierta; en el celular, una sección que se despliega. */
+function Seccion({ titulo, nota, isMobile, defaultOpen = false, children }) {
+  if (isMobile) {
+    return (
+      <details className="stats-section" open={defaultOpen || undefined}>
+        <summary>
+          {titulo}
+          <ChevronDown size={22} aria-hidden="true" />
+        </summary>
+        {nota && <p className="stats-note">{nota}</p>}
+        {children}
+      </details>
+    );
+  }
+  return (
+    <section className="stats-card">
+      <h3>{titulo}</h3>
+      {nota && <p className="stats-note">{nota}</p>}
+      {children}
+    </section>
   );
 }
 
@@ -249,982 +122,479 @@ export default function EstadisticasPanel({
   inscripciones = [],
   colonias = [],
   isMobileView = false,
-  onSelectFicha
+  onSelectFicha,
+  localidad = 'todas',
+  onLocalidadChange,
+  laneColor = () => '#8aa5b2'
 }) {
-  const [localidadFilter, setLocalidadFilter] = useState('todas');
-  const [soloPatologiasActivas, setSoloPatologiasActivas] = useState(false);
+  const [verTodasCondiciones, setVerTodasCondiciones] = useState(false);
+  const setLocalidad = (v) => onLocalidadChange && onLocalidadChange(v);
 
-  const datosFiltrados = useMemo(() => {
-    if (localidadFilter === 'todas') return inscripciones;
-    return inscripciones.filter((i) => String(i.colonia_id) === String(localidadFilter));
-  }, [inscripciones, localidadFilter]);
+  const coloniaActual = colonias.find((c) => String(c.id) === String(localidad));
+  const filtroValido = localidad === 'todas' || Boolean(coloniaActual);
 
-  const stats = useMemo(() => {
-    const total = datosFiltrados.length;
+  const datos = useMemo(() => {
+    if (!filtroValido || localidad === 'todas') return inscripciones;
+    return inscripciones.filter((i) => String(i.colonia_id) === String(localidad));
+  }, [inscripciones, localidad, filtroValido]);
 
-    let sinPatologia = 0;
-    let conUnaPatologia = 0;
-    let conMultiplesPatologias = 0;
+  const conteoPorColonia = useMemo(() => {
+    const m = {};
+    inscripciones.forEach((i) => {
+      m[String(i.colonia_id)] = (m[String(i.colonia_id)] || 0) + 1;
+    });
+    return m;
+  }, [inscripciones]);
+
+  const s = useMemo(() => {
+    const total = datos.length;
+    const condiciones = PATOLOGIAS_META.map((pm) => ({ ...pm, afectados: [] }));
+    const conCondicion = [];
+    let sinCondicion = 0;
+    let unaCondicion = 0;
+    let variasCondiciones = 0;
     let conObraSocial = 0;
-    let autorizados = 0;
-    let conFirmaMedica = 0;
-    let conAntropometria = 0;
-    let enAtencionMedica = 0;
-    let vacunacionCompleta = 0;
-
+    let firmadas = 0;
+    let medidasSinFirma = 0;
+    const vac = { completo: 0, en_curso: 0, incompleto: 0, sin_dato: 0 };
+    const obras = {};
     const edades = [];
+    const rangos = RANGOS_EDAD.map((r) => ({ ...r, value: 0 }));
+    let edadSinDato = 0;
     const pesos = [];
     const tallas = [];
     const imcs = [];
     const cinturas = [];
+    let conMedidas = 0;
 
-    const obrasSocialesMap = {};
-    const parentescoMap = {};
-    const rangosEdad = [
-      { label: '5 a 7 años', sub: 'Inicial', min: 0, max: 7, count: 0, color: '#0ea5e9' },
-      { label: '8 a 10 años', sub: 'Intermedio', min: 8, max: 10, count: 0, color: '#006494' },
-      { label: '11 a 13 años', sub: 'Mayor', min: 11, max: 13, count: 0, color: '#006c4c' },
-      { label: '14+ años', sub: 'Adolescentes', min: 14, max: 99, count: 0, color: '#7c3aed' }
-    ];
-
-    const patologiasDetalle = PATOLOGIAS_META.map((pm) => ({
-      ...pm,
-      count: 0,
-      afectados: []
-    }));
-
-    datosFiltrados.forEach((item) => {
-      // Patologías por niño
-      let cantPatsNino = 0;
-      patologiasDetalle.forEach((pd) => {
-        if (Number(item[`${pd.key}_si`]) === 1) {
-          cantPatsNino++;
-          pd.count++;
-          pd.afectados.push({
-            ficha: item,
-            nombre: item.nino_nombre,
-            detalle: item[`${pd.key}_cual`] || 'Declarada'
-          });
+    datos.forEach((item) => {
+      const suyas = [];
+      condiciones.forEach((c) => {
+        if (Number(item[`${c.key}_si`]) === 1) {
+          const detalle = String(item[`${c.key}_cual`] || '').trim();
+          c.afectados.push({ ficha: item, detalle });
+          suyas.push(c.label);
         }
       });
+      if (suyas.length === 0) sinCondicion++;
+      else {
+        if (suyas.length === 1) unaCondicion++;
+        else variasCondiciones++;
+        conCondicion.push({ ficha: item, detalle: suyas.join(', ') });
+      }
 
-      if (cantPatsNino === 0) sinPatologia++;
-      else if (cantPatsNino === 1) conUnaPatologia++;
-      else conMultiplesPatologias++;
-
-      // Obra Social
       if (Number(item.tiene_obra_social) === 1) {
         conObraSocial++;
-        const osRaw = String(item.obra_social_nombre || 'Otra Obra Social').trim();
-        const osKey = osRaw || 'Otra Obra Social';
-        obrasSocialesMap[osKey] = (obrasSocialesMap[osKey] || 0) + 1;
+        const nombre = String(item.obra_social_nombre || '').trim() || 'Sin nombre cargado';
+        obras[nombre] = (obras[nombre] || 0) + 1;
       }
 
-      // Autorización & Firmas & Vacunación
-      if (Number(item.autorizado) === 1) autorizados++;
-      const tieneFirma = Boolean(String(item.firma_profesional_texto || '').trim());
-      if (tieneFirma) conFirmaMedica++;
+      const firmada = tieneFirma(item);
+      const medida = tieneMedidas(item);
+      if (firmada) firmadas++;
+      else if (medida) medidasSinFirma++;
 
-      const tieneDatosFisicos = Boolean(
-        parseNumber(item.peso) ||
-          parseNumber(item.talla) ||
-          String(item.presion_arterial || item.presion_alta || item.presion_baja || '').trim()
-      );
-      if (tieneDatosFisicos) conAntropometria++;
+      vac[estadoVacunas(item.esquema_vacunacion)]++;
 
-      if (Number(item.recibe_atencion_medica) === 1) enAtencionMedica++;
-
-      const vac = String(item.esquema_vacunacion || '').toLowerCase();
-      if (!vac || vac.includes('completo') || vac.includes('calendario') || vac.includes('al día') || vac.includes('si')) {
-        vacunacionCompleta++;
+      const edad = parseNumber(item.edad);
+      if (edad === null) edadSinDato++;
+      else {
+        edades.push(edad);
+        const r = rangos.find((x) => x.test(edad));
+        if (r) r.value++;
       }
 
-      // Parentesco
-      const par = String(item.parentesco || 'Tutor/a').trim() || 'Tutor/a';
-      parentescoMap[par] = (parentescoMap[par] || 0) + 1;
-
-      // Edad
-      const edadNum = parseNumber(item.edad);
-      if (edadNum !== null) {
-        edades.push(edadNum);
-        const bucket = rangosEdad.find((r) => edadNum >= r.min && edadNum <= r.max);
-        if (bucket) bucket.count++;
-      }
-
-      // Antropometría numérica
       const p = parseNumber(item.peso);
       const t = parseNumber(item.talla);
-      const imcVal = parseNumber(item.imc);
+      const imc = parseNumber(item.imc);
       const cin = parseNumber(item.circunferencia_cintura);
+      if (p !== null || t !== null) conMedidas++;
       if (p !== null) pesos.push(p);
       if (t !== null) tallas.push(t);
-      if (imcVal !== null) imcs.push(imcVal);
-      else if (p !== null && t !== null && t > 30) {
-        const metros = t / 100;
-        imcs.push(p / (metros * metros));
-      }
+      if (imc !== null) imcs.push(imc);
+      else if (p !== null && t !== null && t > 30) imcs.push(p / (t / 100) ** 2);
       if (cin !== null) cinturas.push(cin);
     });
 
-    const avg = (arr, decimals = 1) =>
-      arr.length > 0 ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(decimals) : '—';
+    const prom = (arr, dec = 1) =>
+      arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(dec).replace('.', ',') : null;
 
-    // Top Obras Sociales para el Donut
-    const osSorted = Object.entries(obrasSocialesMap).sort((a, b) => b[1] - a[1]);
-    const topOs = osSorted.slice(0, 3);
-    const otrasOsCount = osSorted.slice(3).reduce((acc, [, v]) => acc + v, 0);
-    const coberturaSegments = [
-      ...topOs.map(([label, value], i) => ({
-        label,
-        value,
-        color: CHART_PALETTE[i % CHART_PALETTE.length]
-      })),
-      ...(otrasOsCount > 0 ? [{ label: 'Otras O. Sociales', value: otrasOsCount, color: '#64748b' }] : []),
-      { label: 'Sin Obra Social', value: total - conObraSocial, color: '#cbd5e1' }
+    const obrasOrden = Object.entries(obras).sort((a, b) => b[1] - a[1]);
+    const otras = obrasOrden.slice(3).reduce((acc, [, v]) => acc + v, 0);
+    const obraSocialBarras = [
+      ...obrasOrden.slice(0, 3).map(([label, value]) => ({ label, value })),
+      ...(otras > 0 ? [{ label: 'Otras obras sociales', value: otras }] : []),
+      { label: 'Sin obra social', value: total - conObraSocial, muted: true }
     ];
 
-    // Estado control clínico
-    const evaluadosConFirma = datosFiltrados.filter((i) => Boolean(String(i.firma_profesional_texto || '').trim())).length;
-    const evaluadosSinFirma = datosFiltrados.filter(
-      (i) =>
-        !String(i.firma_profesional_texto || '').trim() &&
-        Boolean(
-          parseNumber(i.peso) ||
-            parseNumber(i.talla) ||
-            String(i.presion_arterial || i.presion_alta || i.presion_baja || '').trim()
-        )
-    ).length;
-    const pendientesControl = Math.max(0, total - evaluadosConFirma - evaluadosSinFirma);
-
-    // Ordenar patologías de mayor a menor frecuencia
-    const patologiasOrdenadas = [...patologiasDetalle].sort((a, b) => b.count - a.count);
-
-    // Tabla comparativa por localidad (siempre sobre el padrón completo para poder comparar localidades entre sí)
-    const porLocalidad = colonias.map((col) => {
-      const itemsCol = inscripciones.filter((i) => String(i.colonia_id) === String(col.id));
-      const totCol = itemsCol.length;
-      const conPatCol = itemsCol.filter((i) =>
-        PATOLOGIAS_META.some((pm) => Number(i[`${pm.key}_si`]) === 1)
-      ).length;
-      const conOsCol = itemsCol.filter((i) => Number(i.tiene_obra_social) === 1).length;
-      const firmadasCol = itemsCol.filter((i) => Boolean(String(i.firma_profesional_texto || '').trim())).length;
-      const edadesCol = itemsCol.map((i) => parseNumber(i.edad)).filter((n) => n !== null);
-      const edadPromCol = edadesCol.length > 0
-        ? (edadesCol.reduce((a, b) => a + b, 0) / edadesCol.length).toFixed(1)
-        : '—';
-
+    const porColonia = colonias.map((col) => {
+      const items = inscripciones.filter((i) => String(i.colonia_id) === String(col.id));
+      const eds = items.map((i) => parseNumber(i.edad)).filter((n) => n !== null);
       return {
         id: col.id,
         nombre: col.nombre,
-        localidad: col.sede,
-        turno: col.turno,
-        suspendida: col.suspendida,
-        total: totCol,
-        pctPadron: pct(totCol, inscripciones.length),
-        conPatologia: conPatCol,
-        conObraSocial: conOsCol,
-        firmadas: firmadasCol,
-        edadPromedio: edadPromCol
+        lugar: col.turno || '',
+        total: items.length,
+        conCondicion: items.filter((i) => PATOLOGIAS_META.some((pm) => Number(i[`${pm.key}_si`]) === 1)).length,
+        conObraSocial: items.filter((i) => Number(i.tiene_obra_social) === 1).length,
+        firmadas: items.filter(tieneFirma).length,
+        edad: eds.length ? (eds.reduce((a, b) => a + b, 0) / eds.length).toFixed(1).replace('.', ',') : null
       };
     });
 
-    const parentescoList = Object.entries(parentescoMap)
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, count]) => ({ label, count, pct: pct(count, total) }));
-
     return {
       total,
-      sinPatologia,
-      conPatologia: conUnaPatologia + conMultiplesPatologias,
-      conUnaPatologia,
-      conMultiplesPatologias,
+      condiciones: [...condiciones].sort((a, b) => b.afectados.length - a.afectados.length),
+      conCondicion,
+      sinCondicion,
+      unaCondicion,
+      variasCondiciones,
       conObraSocial,
-      autorizados,
-      conFirmaMedica,
-      conAntropometria,
-      enAtencionMedica,
-      vacunacionCompleta,
-      edadPromedio: avg(edades, 1),
-      edadMin: edades.length > 0 ? Math.min(...edades) : '—',
-      edadMax: edades.length > 0 ? Math.max(...edades) : '—',
-      pesoPromedio: avg(pesos, 1),
-      tallaPromedio: avg(tallas, 0),
-      imcPromedio: avg(imcs, 1),
-      cinturaPromedio: avg(cinturas, 0),
-      rangosEdad,
-      coberturaSegments,
-      controlSegments: [
-        { label: 'Control firmado', value: evaluadosConFirma, color: '#006c4c' },
-        { label: 'Medición sin firma', value: evaluadosSinFirma, color: '#0082a8' },
-        { label: 'Pendiente control', value: pendientesControl, color: '#f59e0b' }
+      firmadas,
+      vac,
+      edadPromedio: prom(edades),
+      edadSinDato,
+      rangos,
+      obraSocialBarras,
+      revisionBarras: [
+        { label: 'Firmadas por el médico', value: firmadas },
+        { label: 'Medidos, falta la firma', value: medidasSinFirma },
+        { label: 'Sin revisar todavía', value: total - firmadas - medidasSinFirma, muted: true }
       ],
-      patologiasOrdenadas,
-      porLocalidad,
-      parentescoList
+      vacunasBarras: [
+        { label: 'Completas', value: vac.completo },
+        { label: 'Les falta algún refuerzo', value: vac.en_curso },
+        { label: 'Incompletas', value: vac.incompleto },
+        { label: 'Sin dato', value: vac.sin_dato, muted: true }
+      ],
+      medidas: {
+        n: conMedidas,
+        peso: prom(pesos),
+        talla: prom(tallas, 0),
+        imc: prom(imcs),
+        cintura: prom(cinturas, 0)
+      },
+      porColonia
     };
-  }, [datosFiltrados, colonias, inscripciones]);
+  }, [datos, colonias, inscripciones]);
 
-  const patologiasVisibles = soloPatologiasActivas
-    ? stats.patologiasOrdenadas.filter((p) => p.count > 0)
-    : stats.patologiasOrdenadas;
+  const nombreFiltro = localidad === 'todas' || !coloniaActual ? 'todas las colonias' : coloniaActual.nombre;
 
-  const kpiCards = [
-    {
-      label: 'Total Inscriptos',
-      value: stats.total,
-      sub: `Edad prom.: ${stats.edadPromedio} años`,
-      color: 'var(--md-sys-color-primary)',
-      bg: '#e0f2fe',
-      icon: Users
-    },
-    {
-      label: 'Con Patologías',
-      value: stats.conPatologia,
-      sub: `${pct(stats.conPatologia, stats.total)}% requiere atención`,
-      color: 'var(--md-sys-color-error)',
-      bg: '#ffe4e6',
-      icon: HeartPulse
-    },
-    {
-      label: 'Con Obra Social',
-      value: stats.conObraSocial,
-      sub: `${pct(stats.conObraSocial, stats.total)}% con cobertura`,
-      color: 'var(--md-sys-color-tertiary)',
-      bg: '#d1fae5',
-      icon: ShieldCheck
-    },
-    {
-      label: 'Ficha Firmada',
-      value: stats.conFirmaMedica,
-      sub: `${pct(stats.conFirmaMedica, stats.total)}% aval profesional`,
-      color: '#0284c7',
-      bg: '#e0f2fe',
-      icon: Stethoscope
-    },
-    {
-      label: 'Control Autorizado',
-      value: stats.autorizados,
-      sub: `${pct(stats.autorizados, stats.total)}% por padre/tutor`,
-      color: '#0d9488',
-      bg: '#ccfbf1',
-      icon: FileCheck2
-    },
-    {
-      label: 'Vacunación al Día',
-      value: stats.vacunacionCompleta,
-      sub: `${pct(stats.vacunacionCompleta, stats.total)}% calendario completo`,
-      color: '#d97706',
-      bg: '#fef3c7',
-      icon: Syringe
-    }
-  ];
+  const condicionesVisibles = verTodasCondiciones ? s.condiciones : s.condiciones.filter((c) => c.afectados.length > 0);
+  const condicionesEnCero = s.condiciones.length - s.condiciones.filter((c) => c.afectados.length > 0).length;
+
+  // ---------- Sin fichas cargadas ----------
+  if (inscripciones.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-icon">
+          <BarChart3 size={30} />
+        </div>
+        <h3>Todavía no hay fichas cargadas</h3>
+        <p>Cuando las familias completen la inscripción, acá vas a ver el resumen de salud de los chicos.</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: isMobileView ? '14px' : '20px' }}>
-      {/* ==================== CABECERA + FILTRO POR LOCALIDAD ==================== */}
-      <div
-        className="hero-banner"
-        style={{
-          marginBottom: 0,
-          padding: isMobileView ? '16px' : '20px 24px'
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: isMobileView ? 'flex-start' : 'center',
-            flexDirection: isMobileView ? 'column' : 'row',
-            gap: '8px'
-          }}
-        >
-          <div>
-            <h2
-              className="font-display"
-              style={{
-                fontSize: isMobileView ? '1.2rem' : '1.5rem',
-                fontWeight: 800,
-                color: '#ffffff',
-                lineHeight: 1.2
-              }}
-            >
-              Estadísticas e Indicadores de Salud
-            </h2>
-            <p
-              style={{
-                fontSize: isMobileView ? '0.8rem' : '0.86rem',
-                color: 'rgba(255,255,255,0.88)',
-                marginTop: '3px'
-              }}
-            >
-              Panorama integral médico, demográfico y de cobertura en tiempo real
-            </p>
-          </div>
-          <span
-            style={{
-              padding: '5px 12px',
-              background: 'rgba(255,255,255,0.2)',
-              borderRadius: '999px',
-              fontSize: '0.78rem',
-              fontWeight: 700,
-              whiteSpace: 'nowrap'
-            }}
-          >
-            Muestra analizada: {stats.total} {stats.total === 1 ? 'ficha' : 'fichas'}
-          </span>
-        </div>
-
-        {/* Selector de Localidad */}
-        <div
-          style={{
-            marginTop: '12px',
-            paddingTop: '10px',
-            borderTop: '1px solid rgba(255,255,255,0.2)'
-          }}
-        >
-          <div
-            style={{
-              fontSize: '0.68rem',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: 'rgba(255,255,255,0.85)',
-              marginBottom: '6px'
-            }}
-          >
-            Filtrar métricas por localidad
-          </div>
-          <div className={isMobileView ? 'hero-chips-mobile' : undefined} style={!isMobileView ? { display: 'flex', flexWrap: 'wrap', gap: '8px' } : undefined}>
-            <button
-              onClick={() => setLocalidadFilter('todas')}
-              className={`hero-chip ${localidadFilter === 'todas' ? 'active' : ''}`}
-            >
-              <MapPin size={13} />
-              Todas las Localidades ({inscripciones.length})
-            </button>
-            {colonias.map((c) => {
-              const countCol = inscripciones.filter((i) => String(i.colonia_id) === String(c.id)).length;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setLocalidadFilter(String(c.id))}
-                  className={`hero-chip ${String(localidadFilter) === String(c.id) ? 'active' : ''}`}
-                >
-                  {c.nombre} ({countCol})
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ==================== KPI GRID (2x3 EN MOBILE, 3/6 EN DESKTOP) ==================== */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isMobileView
-            ? 'repeat(2, minmax(0, 1fr))'
-            : 'repeat(auto-fit, minmax(195px, 1fr))',
-          gap: isMobileView ? '10px' : '14px'
-        }}
-      >
-        {kpiCards.map((kpi, idx) => {
-          const Icon = kpi.icon;
-          return (
-            <div
-              key={idx}
-              className="stat-card"
-              style={{
-                padding: isMobileView ? '13px 12px' : '16px 18px',
-                borderTop: `4px solid ${kpi.color}`,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: '6px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                <span
-                  style={{
-                    fontSize: isMobileView ? '0.7rem' : '0.75rem',
-                    color: 'var(--md-sys-color-on-surface-variant)',
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.03em',
-                    lineHeight: 1.2
-                  }}
-                >
-                  {kpi.label}
-                </span>
-                <span
-                  style={{
-                    width: isMobileView ? '28px' : '32px',
-                    height: isMobileView ? '28px' : '32px',
-                    borderRadius: '9px',
-                    background: kpi.bg,
-                    color: kpi.color,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                  }}
-                >
-                  <Icon size={isMobileView ? 15 : 17} />
-                </span>
-              </div>
-              <div
-                className="font-display"
-                style={{
-                  fontSize: isMobileView ? '1.75rem' : '2.15rem',
-                  fontWeight: 800,
-                  color: kpi.color,
-                  lineHeight: 1.05
-                }}
-              >
-                {kpi.value}
-              </div>
-              <div
-                style={{
-                  fontSize: isMobileView ? '0.73rem' : '0.78rem',
-                  color: 'var(--md-sys-color-on-surface-variant)',
-                  lineHeight: 1.25
-                }}
-              >
-                {kpi.sub}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ==================== GRÁFICOS CIRCULARES (DONUT CHARTS) ==================== */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isMobileView
-            ? '1fr'
-            : 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: isMobileView ? '12px' : '16px'
-        }}
-      >
-        <DonutChartCard
-          subtitle="Salud General"
-          title="Condición Médica del Padrón"
-          centerValue={`${pct(stats.sinPatologia, stats.total)}%`}
-          centerLabel="Sin patologías"
-          isMobile={isMobileView}
-          segments={[
-            { label: 'Sin patologías', value: stats.sinPatologia, color: '#006c4c' },
-            { label: '1 patología', value: stats.conUnaPatologia, color: '#f59e0b' },
-            { label: '2 o más patologías', value: stats.conMultiplesPatologias, color: '#ba1a1a' }
-          ]}
-        />
-
-        <DonutChartCard
-          subtitle="Cobertura Médica"
-          title="Distribución de Obras Sociales"
-          centerValue={`${pct(stats.conObraSocial, stats.total)}%`}
-          centerLabel="Con cobertura"
-          isMobile={isMobileView}
-          segments={stats.coberturaSegments}
-        />
-
-        <DonutChartCard
-          subtitle="Seguimiento Clínico"
-          title="Estado de Revisión Médica"
-          centerValue={`${stats.conFirmaMedica}/${stats.total}`}
-          centerLabel="Firmadas"
-          isMobile={isMobileView}
-          segments={stats.controlSegments}
-        />
-      </div>
-
-      {/* ==================== DEMOGRAFÍA (EDADES) + ANTROPOMETRÍA & VÍNCULO ==================== */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isMobileView ? '1fr' : '1.1fr 0.9fr',
-          gap: isMobileView ? '12px' : '16px'
-        }}
-      >
-        {/* Distribución por Rangos Etarios */}
-        <div className="gf-card" style={{ padding: isMobileView ? '16px 14px' : '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: '0.73rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--md-sys-color-primary)' }}>
-                Demografía
-              </div>
-              <h3 className="font-display" style={{ fontSize: isMobileView ? '1.04rem' : '1.12rem', fontWeight: 800 }}>
-                Distribución por Grupos de Edad
-              </h3>
-            </div>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                padding: '4px 10px',
-                borderRadius: '999px',
-                background: 'var(--md-sys-color-primary-container)',
-                color: 'var(--md-sys-color-on-primary-container)'
-              }}
-            >
-              Rango: {stats.edadMin} a {stats.edadMax} años
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {stats.rangosEdad.map((r, idx) => {
-              const porcentaje = pct(r.count, stats.total);
-              return (
-                <div key={idx}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.84rem', marginBottom: '4px' }}>
-                    <span>
-                      <strong>{r.label}</strong>{' '}
-                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>({r.sub})</span>
-                    </span>
-                    <span style={{ fontWeight: 800, color: r.color }}>
-                      {r.count} {r.count === 1 ? 'niño/a' : 'niños/as'} ({porcentaje}%)
-                    </span>
-                  </div>
-                  <div style={{ height: '10px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        height: '100%',
-                        width: `${porcentaje}%`,
-                        background: r.color,
-                        borderRadius: '999px',
-                        transition: 'width 0.35s ease'
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Promedios Clínicos / Antropométricos + Vínculo Responsable */}
-        <div className="gf-card" style={{ padding: isMobileView ? '16px 14px' : '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '14px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.73rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--md-sys-color-tertiary)' }}>
-              <Activity size={14} />
-              <span>Control Niño Sano</span>
-            </div>
-            <h3 className="font-display" style={{ fontSize: isMobileView ? '1.04rem' : '1.12rem', fontWeight: 800, marginBottom: '10px' }}>
-              Promedios Antropométricos
-            </h3>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
-              <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Peso Promedio</div>
-                <div className="font-display" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
-                  {stats.pesoPromedio !== '—' ? `${stats.pesoPromedio} kg` : '—'}
-                </div>
-              </div>
-              <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Talla Promedio</div>
-                <div className="font-display" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
-                  {stats.tallaPromedio !== '—' ? `${stats.tallaPromedio} cm` : '—'}
-                </div>
-              </div>
-              <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>IMC Promedio</div>
-                <div className="font-display" style={{ fontSize: '1.25rem', fontWeight: 800, color: '#006494' }}>
-                  {stats.imcPromedio}
-                </div>
-              </div>
-              <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>En Atención Médica</div>
-                <div className="font-display" style={{ fontSize: '1.25rem', fontWeight: 800, color: stats.enAtencionMedica > 0 ? '#b45309' : '#006c4c' }}>
-                  {stats.enAtencionMedica} ({pct(stats.enAtencionMedica, stats.total)}%)
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Vínculo del Tutor */}
-          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.76rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
-              <UserCheck size={14} /> Adulto Responsable Declarado:
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {stats.parentescoList.length === 0 ? (
-                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Sin registros</span>
-              ) : (
-                stats.parentescoList.map((p, idx) => (
-                  <span
-                    key={idx}
-                    style={{
-                      fontSize: '0.76rem',
-                      fontWeight: 700,
-                      padding: '4px 10px',
-                      borderRadius: '999px',
-                      background: '#eff6ff',
-                      color: '#1e3a8a',
-                      border: '1px solid #bfdbfe'
-                    }}
-                  >
-                    {p.label}: {p.count} ({p.pct}%)
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ==================== GRÁFICO EN TABLA 1: PREVALENCIA DE PATOLOGÍAS ==================== */}
-      <div className="gf-card" style={{ padding: isMobileView ? '16px 14px' : '22px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: isMobileView ? 'flex-start' : 'center',
-            flexDirection: isMobileView ? 'column' : 'row',
-            gap: '10px',
-            marginBottom: '14px'
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.73rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#ba1a1a' }}>
-              <Table2 size={14} />
-              <span>Gráfico en Tabla • Epidemiología</span>
-            </div>
-            <h3 className="font-display" style={{ fontSize: isMobileView ? '1.06rem' : '1.16rem', fontWeight: 800 }}>
-              Detalle de Patologías y Condiciones Declaradas
-            </h3>
-          </div>
-
+    <div className="stats">
+      {/* ==================== CABECERA + FILTRO ==================== */}
+      <section className="hero-banner stats-banner" aria-label="Resumen de las fichas" style={{ marginBottom: 0 }}>
+        <h2 style={{ fontSize: isMobileView ? '1.3rem' : '1.6rem', fontWeight: 800 }}>Resumen de las fichas</h2>
+        <p>
+          {s.total} {plural(s.total, 'ficha', 'fichas')} de {nombreFiltro}
+        </p>
+        <span className="stats-filter-label" id="stats-filtro-label">
+          Mostrar los datos de:
+        </span>
+        <div className="stats-filter" role="group" aria-labelledby="stats-filtro-label">
           <button
             type="button"
-            onClick={() => setSoloPatologiasActivas(!soloPatologiasActivas)}
-            className={`md3-chip ${soloPatologiasActivas ? 'active' : ''}`}
-            style={{ fontSize: '0.76rem', padding: '5px 12px' }}
+            onClick={() => setLocalidad('todas')}
+            className={`hero-chip ${localidad === 'todas' || !filtroValido ? 'active' : ''}`}
+            aria-pressed={localidad === 'todas' || !filtroValido}
           >
-            {soloPatologiasActivas ? 'Mostrando solo con casos • Ver las 13' : 'Filtrar solo con casos (> 0)'}
+            Todas ({inscripciones.length})
+          </button>
+          {colonias.map((c) => {
+            const activo = String(localidad) === String(c.id);
+            return (
+              <button
+                type="button"
+                key={c.id}
+                onClick={() => setLocalidad(String(c.id))}
+                className={`hero-chip ${activo ? 'active' : ''}`}
+                aria-pressed={activo}
+              >
+                <span className="lane-swatch" style={{ background: laneColor(c.id) }} />
+                {c.nombre} ({conteoPorColonia[String(c.id)] || 0})
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {s.total === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">
+            <BarChart3 size={30} />
+          </div>
+          <h3>{nombreFiltro} todavía no tiene fichas</h3>
+          <p>Elegí otra colonia o mirá los datos de todas juntas.</p>
+          <button type="button" className="md3-btn md3-btn-filled" onClick={() => setLocalidad('todas')}>
+            Ver todas las colonias
           </button>
         </div>
-
-        {patologiasVisibles.length === 0 ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#006c4c', fontWeight: 600, background: '#f0fdf4', borderRadius: '12px' }}>
-            ✔ No se registran casos activos de patologías en la selección actual.
-          </div>
-        ) : isMobileView ? (
-          /* Vista Mobile optimizada: tarjetas-fila ultra legibles sin scroll horizontal */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {patologiasVisibles.map((pat) => {
-              const p = pct(pat.count, stats.total);
-              const hasCases = pat.count > 0;
-              return (
-                <div
-                  key={pat.key}
-                  style={{
-                    padding: '11px 12px',
-                    borderRadius: '12px',
-                    background: hasCases ? '#fff1f2' : '#f8fafc',
-                    border: hasCases ? '1px solid #fecdd3' : '1px solid #e2e8f0'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                    <strong style={{ fontSize: '0.86rem', color: hasCases ? '#881337' : '#334155' }}>
-                      {pat.label}
-                    </strong>
-                    <span
-                      style={{
-                        fontSize: '0.74rem',
-                        fontWeight: 800,
-                        padding: '2px 8px',
-                        borderRadius: '999px',
-                        background: hasCases ? '#be123c' : '#e2e8f0',
-                        color: hasCases ? '#ffffff' : '#475569',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {pat.count} {pat.count === 1 ? 'caso' : 'casos'} ({p}%)
-                    </span>
-                  </div>
-
-                  {/* Barra visual integrada */}
-                  <div style={{ height: '6px', background: hasCases ? '#ffe4e6' : '#e2e8f0', borderRadius: '999px', marginTop: '7px', overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        height: '100%',
-                        width: `${hasCases ? Math.max(p, 6) : 0}%`,
-                        background: '#be123c',
-                        borderRadius: '999px'
-                      }}
-                    />
-                  </div>
-
-                  {hasCases && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
-                      {pat.afectados.map((af, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => onSelectFicha && onSelectFicha(af.ficha)}
-                          style={{
-                            background: '#ffffff',
-                            border: '1px solid #fda4af',
-                            borderRadius: '8px',
-                            padding: '4px 8px',
-                            fontSize: '0.74rem',
-                            color: '#881337',
-                            textAlign: 'left',
-                            cursor: onSelectFicha ? 'pointer' : 'default'
-                          }}
-                        >
-                          <strong>{af.nombre}:</strong> {af.detalle}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+      ) : (
+        <>
+            <section className="stats-card" aria-labelledby="en-numeros">
+              <h3 id="en-numeros">En números</h3>
+              <dl className="facts" style={{ gridTemplateColumns: isMobileView ? undefined : 'repeat(3, minmax(0, 1fr))' }}>
+                <div>
+                  <dt>Inscriptos</dt>
+                  <dd>{s.total}</dd>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          /* Vista Desktop: Tabla analítica con barras integradas */
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #cbd5e1', textAlign: 'left', color: '#475569', fontSize: '0.76rem', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '10px 12px', width: '24%' }}>Patología / Condición</th>
-                  <th style={{ padding: '10px 12px', width: '10%', textAlign: 'center' }}>Casos</th>
-                  <th style={{ padding: '10px 12px', width: '24%' }}>Prevalencia (%)</th>
-                  <th style={{ padding: '10px 12px', width: '42%' }}>Niños/as y Detalle Clínico</th>
-                </tr>
-              </thead>
-              <tbody>
-                {patologiasVisibles.map((pat) => {
-                  const p = pct(pat.count, stats.total);
-                  const hasCases = pat.count > 0;
+                <div>
+                  <dt>Edad promedio</dt>
+                  <dd>
+                    {s.edadPromedio ? `${s.edadPromedio} años` : 'Sin dato'}
+                    {s.edadSinDato > 0 && <small>{s.edadSinDato} sin fecha de nacimiento</small>}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Tienen obra social</dt>
+                  <dd>
+                    {pct(s.conObraSocial, s.total)}%<small>{s.conObraSocial} de {s.total}</small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Vacunas completas</dt>
+                  <dd>
+                    {pct(s.vac.completo, s.total)}%
+                    <small>
+                      {s.vac.completo} de {s.total}
+                      {s.vac.sin_dato > 0 ? ` · ${s.vac.sin_dato} sin dato` : ''}
+                    </small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Fichas firmadas</dt>
+                  <dd>
+                    {s.firmadas} de {s.total}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Sin condiciones de salud</dt>
+                  <dd>
+                    {pct(s.sinCondicion, s.total)}%<small>{s.sinCondicion} de {s.total}</small>
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+          {/* ==================== CONDICIONES DE SALUD ==================== */}
+          <Seccion
+            titulo="Chicos con condiciones de salud"
+            isMobile={isMobileView}
+            defaultOpen
+            nota={
+              s.conCondicion.length === 0
+                ? undefined
+                : `${s.unaCondicion} ${plural(s.unaCondicion, 'chico tiene', 'chicos tienen')} una condición y ${s.variasCondiciones} ${plural(s.variasCondiciones, 'tiene', 'tienen')} dos o más. Tocá un nombre para abrir su ficha.`
+            }
+          >
+            {condicionesVisibles.length === 0 ? (
+              <p className="attend-ok" style={{ marginTop: 14 }}>
+                <Check size={18} aria-hidden="true" /> Ningún chico tiene condiciones de salud declaradas.
+              </p>
+            ) : (
+              <ul className="cond-list">
+                {condicionesVisibles.map((c) => {
+                  const n = c.afectados.length;
                   return (
-                    <tr
-                      key={pat.key}
-                      style={{
-                        borderBottom: '1px solid #e2e8f0',
-                        background: hasCases ? '#fff5f5' : 'transparent'
-                      }}
-                    >
-                      <td style={{ padding: '10px 12px', fontWeight: 700, color: hasCases ? '#881337' : '#334155' }}>
-                        {pat.label}
-                      </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            minWidth: '28px',
-                            padding: '2px 8px',
-                            borderRadius: '999px',
-                            fontWeight: 800,
-                            fontSize: '0.78rem',
-                            background: hasCases ? '#be123c' : '#e2e8f0',
-                            color: hasCases ? '#fff' : '#475569'
-                          }}
-                        >
-                          {pat.count}
+                    <li key={c.key} className="cond-row">
+                      <div className="cond-name">
+                        <span className={`count-badge ${n === 0 ? 'is-zero' : ''}`}>
+                          {n}
+                          <span className="sr-only"> {plural(n, 'caso', 'casos')} de</span>
                         </span>
-                      </td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ flex: 1, height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
-                            <div
-                              style={{
-                                height: '100%',
-                                width: `${hasCases ? Math.max(p, 5) : 0}%`,
-                                background: '#be123c',
-                                borderRadius: '999px'
-                              }}
+                        {c.label}
+                      </div>
+                      {n === 0 ? (
+                        <span className="cond-empty">Nadie</span>
+                      ) : (
+                        <div className="name-list">
+                          {c.afectados.map((a) => (
+                            <NombreBoton
+                              key={a.ficha.id ?? a.ficha.nino_dni}
+                              ficha={a.ficha}
+                              detalle={a.detalle}
+                              onSelectFicha={onSelectFicha}
                             />
-                          </div>
-                          <span style={{ fontWeight: 700, minWidth: '36px', textAlign: 'right', color: hasCases ? '#be123c' : '#64748b' }}>
-                            {p}%
-                          </span>
+                          ))}
                         </div>
-                      </td>
-                      <td style={{ padding: '10px 12px' }}>
-                        {hasCases ? (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {pat.afectados.map((af, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => onSelectFicha && onSelectFicha(af.ficha)}
-                                title="Ver ficha médica completa"
-                                style={{
-                                  background: '#ffffff',
-                                  border: '1px solid #fda4af',
-                                  borderRadius: '8px',
-                                  padding: '3px 9px',
-                                  fontSize: '0.76rem',
-                                  color: '#881337',
-                                  cursor: onSelectFicha ? 'pointer' : 'default'
-                                }}
-                              >
-                                <strong>{af.nombre}:</strong> {af.detalle}
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>Sin casos declarados</span>
-                        )}
-                      </td>
-                    </tr>
+                      )}
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ==================== GRÁFICO EN TABLA 2: COMPARATIVA POR LOCALIDAD ==================== */}
-      <div className="gf-card" style={{ padding: isMobileView ? '16px 14px' : '22px' }}>
-        <div style={{ marginBottom: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.73rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--md-sys-color-primary)' }}>
-            <MapPin size={14} />
-            <span>Comparativa Territorial</span>
-          </div>
-          <h3 className="font-display" style={{ fontSize: isMobileView ? '1.06rem' : '1.16rem', fontWeight: 800 }}>
-            Resumen Comparativo por Colonia / Localidad
-          </h3>
-        </div>
-
-        {isMobileView ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {stats.porLocalidad.map((loc) => (
-              <div
-                key={loc.id}
-                style={{
-                  padding: '13px',
-                  borderRadius: '14px',
-                  background: '#f8fafc',
-                  border: '1px solid #cbd5e1',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px'
-                }}
+              </ul>
+            )}
+            {condicionesEnCero > 0 && (
+              <button
+                type="button"
+                className="attend-toggle cond-more"
+                aria-expanded={verTodasCondiciones}
+                onClick={() => setVerTodasCondiciones((v) => !v)}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                  <div>
-                    <strong style={{ fontSize: '0.94rem', color: '#0f172a', display: 'block' }}>{loc.nombre}</strong>
-                    <span style={{ fontSize: '0.76rem', color: '#64748b' }}>📍 {loc.localidad}</span>
-                  </div>
-                  <span
-                    style={{
-                      background: '#cbe6ff',
-                      color: '#001e30',
-                      padding: '4px 10px',
-                      borderRadius: '999px',
-                      fontWeight: 800,
-                      fontSize: '0.78rem',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {loc.total} ({loc.pctPadron}%)
-                  </span>
-                </div>
+                {verTodasCondiciones
+                  ? 'Ocultar las que no tienen casos'
+                  : `Ver también las ${condicionesEnCero} sin casos`}
+                <ChevronDown size={18} aria-hidden="true" />
+              </button>
+            )}
+          </Seccion>
 
-                {/* Barra de participación sobre el padrón total */}
-                <div style={{ height: '7px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      height: '100%',
-                      width: `${loc.pctPadron}%`,
-                      background: 'var(--md-sys-color-primary)',
-                      borderRadius: '999px'
-                    }}
-                  />
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                    gap: '6px',
-                    textAlign: 'center',
-                    fontSize: '0.74rem'
-                  }}
-                >
-                  <div style={{ background: '#ffffff', padding: '6px 4px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ color: '#64748b' }}>Patologías</div>
-                    <strong style={{ color: loc.conPatologia > 0 ? '#be123c' : '#0f172a', fontSize: '0.86rem' }}>
-                      {loc.conPatologia}
-                    </strong>
-                  </div>
-                  <div style={{ background: '#ffffff', padding: '6px 4px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ color: '#64748b' }}>O. Social</div>
-                    <strong style={{ color: '#006c4c', fontSize: '0.86rem' }}>{loc.conObraSocial}</strong>
-                  </div>
-                  <div style={{ background: '#ffffff', padding: '6px 4px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ color: '#64748b' }}>Firmadas</div>
-                    <strong style={{ color: '#006494', fontSize: '0.86rem' }}>{loc.firmadas}</strong>
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* ==================== DISTRIBUCIONES ==================== */}
+          <div className="stats-grid">
+            <Seccion
+              titulo="Revisión médica"
+              isMobile={isMobileView}
+              nota="“Medidos” son los que ya tienen peso, altura o presión cargados."
+            >
+              <ListaBarras items={s.revisionBarras} total={s.total} />
+            </Seccion>
+            <Seccion titulo="Vacunas" isMobile={isMobileView} nota="Según lo que declaró la familia en el formulario.">
+              <ListaBarras items={s.vacunasBarras} total={s.total} />
+            </Seccion>
+            <Seccion titulo="Obra social" isMobile={isMobileView}>
+              <ListaBarras items={s.obraSocialBarras} total={s.total} />
+            </Seccion>
+            <Seccion
+              titulo="Edades"
+              isMobile={isMobileView}
+              nota={s.edadSinDato > 0 ? `${s.edadSinDato} ${plural(s.edadSinDato, 'chico no tiene', 'chicos no tienen')} la edad cargada.` : undefined}
+            >
+              <ListaBarras items={s.rangos} total={s.total} />
+            </Seccion>
           </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.86rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #cbd5e1', textAlign: 'left', color: '#475569', fontSize: '0.76rem', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '10px 12px' }}>Colonia / Localidad</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'center' }}>Inscriptos</th>
-                  <th style={{ padding: '10px 12px', width: '22%' }}>Participación Padrón</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'center' }}>Con Patologías</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'center' }}>Con Obra Social</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'center' }}>Control Firmado</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'center' }}>Edad Prom.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.porLocalidad.map((loc) => (
-                  <tr key={loc.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '12px' }}>
-                      <strong style={{ color: '#0f172a', display: 'block' }}>{loc.nombre}</strong>
-                      <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                        📍 {loc.localidad} • {loc.turno}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: 800, fontSize: '0.96rem', color: 'var(--md-sys-color-primary)' }}>
-                      {loc.total}
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ flex: 1, height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              height: '100%',
-                              width: `${loc.pctPadron}%`,
-                              background: 'var(--md-sys-color-primary)',
-                              borderRadius: '999px'
-                            }}
-                          />
-                        </div>
-                        <span style={{ fontWeight: 700, minWidth: '36px', textAlign: 'right' }}>{loc.pctPadron}%</span>
+
+          {/* ==================== MEDIDAS ==================== */}
+          <Seccion
+            titulo="Peso y altura promedio"
+            isMobile={isMobileView}
+            nota={
+              s.medidas.n > 0
+                ? `Promedio de los ${s.medidas.n} ${plural(s.medidas.n, 'chico que tiene', 'chicos que tienen')} medidas cargadas.`
+                : 'Todavía no hay medidas cargadas en las fichas.'
+            }
+          >
+            {s.medidas.n > 0 && (
+              <dl className="facts" style={{ gridTemplateColumns: isMobileView ? undefined : 'repeat(4, minmax(0, 1fr))' }}>
+                <div>
+                  <dt>Peso</dt>
+                  <dd>{s.medidas.peso ? `${s.medidas.peso} kg` : 'Sin dato'}</dd>
+                </div>
+                <div>
+                  <dt>Altura</dt>
+                  <dd>{s.medidas.talla ? `${s.medidas.talla} cm` : 'Sin dato'}</dd>
+                </div>
+                <div>
+                  <dt>Índice de masa corporal</dt>
+                  <dd>{s.medidas.imc || 'Sin dato'}</dd>
+                </div>
+                <div>
+                  <dt>Cintura</dt>
+                  <dd>{s.medidas.cintura ? `${s.medidas.cintura} cm` : 'Sin dato'}</dd>
+                </div>
+              </dl>
+            )}
+          </Seccion>
+
+          {/* ==================== COMPARACIÓN ==================== */}
+          {s.porColonia.length > 0 && (
+            <Seccion
+              titulo="Comparación entre colonias"
+              isMobile={isMobileView}
+              nota="Muestra siempre todas las colonias, aunque arriba elijas una."
+            >
+              {isMobileView ? (
+                <ul className="compare-items">
+                  {s.porColonia.map((c) => (
+                    <li key={c.id} className={`compare-item ${String(localidad) === String(c.id) ? 'is-current' : ''}`}>
+                      <div className="compare-name">
+                        <span className="lane-swatch" style={{ background: laneColor(c.id) }} />
+                        {c.nombre}
                       </div>
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: 700, color: loc.conPatologia > 0 ? '#be123c' : '#64748b' }}>
-                      {loc.conPatologia} ({pct(loc.conPatologia, loc.total)}%)
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: 700, color: '#006c4c' }}>
-                      {loc.conObraSocial} ({pct(loc.conObraSocial, loc.total)}%)
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: 700, color: '#0284c7' }}>
-                      {loc.firmadas}/{loc.total}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: 600 }}>
-                      {loc.edadPromedio !== '—' ? `${loc.edadPromedio} años` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                      {c.lugar && <div className="stats-note" style={{ marginTop: 2 }}>{c.lugar}</div>}
+                      <dl>
+                        <div>
+                          <dt>Inscriptos</dt>
+                          <dd>{c.total}</dd>
+                        </div>
+                        <div>
+                          <dt>Con condiciones de salud</dt>
+                          <dd>{c.conCondicion}</dd>
+                        </div>
+                        <div>
+                          <dt>Con obra social</dt>
+                          <dd>{c.conObraSocial}</dd>
+                        </div>
+                        <div>
+                          <dt>Fichas firmadas</dt>
+                          <dd>
+                            {c.firmadas} de {c.total}
+                          </dd>
+                        </div>
+                      </dl>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="compare-wrap">
+                  <table className="compare-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Colonia</th>
+                        <th scope="col" className="num">Inscriptos</th>
+                        <th scope="col" className="num">Con condiciones de salud</th>
+                        <th scope="col" className="num">Con obra social</th>
+                        <th scope="col" className="num">Fichas firmadas</th>
+                        <th scope="col" className="num">Edad promedio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {s.porColonia.map((c) => (
+                        <tr key={c.id} className={String(localidad) === String(c.id) ? 'is-current' : undefined}>
+                          <td>
+                            <div className="compare-name">
+                              <span className="lane-swatch" style={{ background: laneColor(c.id) }} />
+                              {c.nombre}
+                            </div>
+                            {c.lugar && <div className="muted">{c.lugar}</div>}
+                          </td>
+                          <td className="num">
+                            <b>{c.total}</b> <span className="muted">({pct(c.total, inscripciones.length)}%)</span>
+                          </td>
+                          <td className="num">
+                            {c.conCondicion} <span className="muted">({pct(c.conCondicion, c.total)}%)</span>
+                          </td>
+                          <td className="num">
+                            {c.conObraSocial} <span className="muted">({pct(c.conObraSocial, c.total)}%)</span>
+                          </td>
+                          <td className="num">
+                            {c.firmadas} de {c.total}
+                          </td>
+                          <td className="num">{c.edad ? `${c.edad} años` : 'Sin dato'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Seccion>
+          )}
+        </>
+      )}
     </div>
   );
 }

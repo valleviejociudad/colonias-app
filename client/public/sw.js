@@ -1,9 +1,10 @@
-const CACHE_NAME = 'colonias-vv-v18';
+const CACHE_NAME = 'colonias-vv-v19';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon.svg',
+  '/favicon.ico',
+  '/favicon-32.png',
   '/icon-192.png'
 ];
 

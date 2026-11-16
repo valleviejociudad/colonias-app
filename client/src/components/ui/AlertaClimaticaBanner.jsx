@@ -1,103 +1,94 @@
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { CloudLightning, AlertTriangle, X } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { CloudLightning, Info, X } from 'lucide-react';
+
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+// "2026-01-12 08:30:00" (hora local) -> "lunes 12 de enero"
+function diaLargo(raw) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw || ''));
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`;
+}
+
+const CLAVE_OCULTOS = 'avisos-ocultos';
+function leerOcultos() {
+  try {
+    return JSON.parse(sessionStorage.getItem(CLAVE_OCULTOS) || '[]');
+  } catch {
+    return [];
+  }
+}
 
 export default function AlertaClimaticaBanner({ refreshTrigger = 0 }) {
   const [alertas, setAlertas] = useState([]);
-  const [dismissedIds, setDismissedIds] = useState([]);
+  const [ocultos, setOcultos] = useState(leerOcultos);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     fetch('/api/alertas')
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) {
-          setAlertas(data.filter((a) => a.activa === 1));
-        }
+        if (Array.isArray(data)) setAlertas(data.filter((a) => a.activa === 1));
       })
       .catch(() => {});
   }, [refreshTrigger]);
 
-  const visibles = alertas.filter((a) => !dismissedIds.includes(a.id));
+  const ocultar = (id) => {
+    setOcultos((prev) => {
+      const next = [...prev, id];
+      try {
+        sessionStorage.setItem(CLAVE_OCULTOS, JSON.stringify(next));
+      } catch {
+        /* sin almacenamiento: queda oculto hasta recargar */
+      }
+      return next;
+    });
+  };
 
-  if (visibles.length === 0) return null;
+  const visibles = alertas.filter((a) => !ocultos.includes(a.id));
 
   return (
-    <div className="no-print" style={{ marginBottom: '16px' }}>
-      <AnimatePresence>
-        {visibles.map((alerta) => (
-          <motion.div
-            key={alerta.id}
-            initial={{ opacity: 0, y: -16, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-            transition={{ duration: 0.35, ease: [0.05, 0.7, 0.1, 1] }}
-            style={{
-              background: alerta.tipo === 'suspension'
-                ? 'linear-gradient(135deg, #fff3cd 0%, #ffe8a1 100%)'
-                : 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)',
-              border: alerta.tipo === 'suspension' ? '1.5px solid #f59e0b' : '1.5px solid #0284c7',
-              borderRadius: '16px',
-              padding: '14px 18px',
-              marginBottom: '10px',
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              gap: '12px',
-              boxShadow: '0 4px 14px rgba(245, 158, 11, 0.15)'
-            }}
-          >
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <div
-                style={{
-                  background: alerta.tipo === 'suspension' ? '#f59e0b' : '#0284c7',
-                  color: '#fff',
-                  borderRadius: '12px',
-                  padding: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}
-              >
-                {alerta.tipo === 'suspension' ? <CloudLightning size={22} /> : <AlertTriangle size={22} />}
-              </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span
-                    style={{
-                      fontSize: '0.73rem',
-                      fontWeight: 800,
-                      textTransform: 'uppercase',
-                      background: alerta.tipo === 'suspension' ? '#b45309' : '#0369a1',
-                      color: '#fff',
-                      padding: '2px 8px',
-                      borderRadius: '999px'
-                    }}
-                  >
-                    {alerta.colonia_nombre || 'Todas las Localidades'}
-                  </span>
-                  <strong style={{ color: '#78350f', fontSize: '0.96rem' }}>{alerta.titulo}</strong>
-                </div>
-                <p style={{ color: '#451a03', fontSize: '0.88rem', marginTop: '4px' }}>
-                  {alerta.mensaje}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setDismissedIds((prev) => [...prev, alerta.id])}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                color: '#78350f',
-                padding: '4px'
-              }}
-              title="Ocultar aviso"
+    <div className="no-print" aria-live="polite">
+      <AnimatePresence initial={false}>
+        {visibles.map((alerta) => {
+          const susp = Number(alerta.suspende ?? (alerta.tipo === 'suspension' ? 1 : 0)) === 1;
+          const Icon = susp ? CloudLightning : Info;
+          const fecha = diaLargo(alerta.created_at);
+          return (
+            <motion.div
+              key={alerta.id}
+              initial={reduceMotion ? false : { opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+              className={`aviso-banner${susp ? '' : ' is-info'}`}
             >
-              <X size={18} />
-            </button>
-          </motion.div>
-        ))}
+              <span className="aviso-banner-icon" aria-hidden="true">
+                <Icon size={22} />
+              </span>
+              <div className="aviso-banner-body">
+                <p className="aviso-banner-where">
+                  {alerta.colonia_nombre || 'Todas las localidades'}
+                  {fecha && <span> · {fecha}</span>}
+                </p>
+                <strong className="aviso-banner-title">{alerta.titulo}</strong>
+                <p className="aviso-banner-msg">{alerta.mensaje}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => ocultar(alerta.id)}
+                className="tool-btn aviso-banner-close"
+                aria-label="Ocultar este aviso"
+                title="Ocultar este aviso"
+              >
+                <X size={20} />
+              </button>
+            </motion.div>
+          );
+        })}
       </AnimatePresence>
     </div>
   );

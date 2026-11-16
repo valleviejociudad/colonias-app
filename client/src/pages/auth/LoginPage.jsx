@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Shield, ArrowLeft, Mail, Lock, LogIn } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { ArrowLeft, Eye, EyeOff, Loader2, LogIn, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import HeaderValleViejo from '../../components/ui/HeaderValleViejo';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [verPassword, setVerPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -22,189 +23,109 @@ export default function LoginPage() {
       await login(email, password);
       navigate('/admin');
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'No pudimos ingresar. Revisá el correo y la contraseña.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 'calc(20px + env(safe-area-inset-top, 0px)) 14px calc(20px + env(safe-area-inset-bottom, 0px))',
-        background: 'linear-gradient(145deg, var(--md-sys-color-primary-container) 0%, var(--md-sys-color-background) 55%, var(--md-sys-color-secondary-container) 100%)'
-      }}
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.4, ease: [0.05, 0.7, 0.1, 1] }}
-        className="gf-card"
-        style={{ maxWidth: '460px', width: '100%', padding: '28px 26px' }}
-      >
-        <div className="gf-card-header-bar" />
-
-        <HeaderValleViejo compact={true} showTemporada={false} />
-
-        <div style={{ textAlign: 'center', margin: '18px 0 20px' }}>
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: 'var(--md-sys-color-primary-container)',
-              color: 'var(--md-sys-color-on-primary-container)',
-              fontSize: '0.76rem',
-              fontWeight: 700,
-              padding: '4px 12px',
-              borderRadius: 'var(--md-sys-shape-corner-full)',
-              marginBottom: '8px'
-            }}
-          >
-            <Shield size={14} /> PANEL DE GESTIÓN Y GUARDIA MÉDICA
+    <div className="login-page">
+      <div className="gf-water login-water">
+        <div className="gf-water-logos">
+          <span className="logo-chip"><img src="/logodeporte.png" alt="Deporte Valle Viejo" /></span>
+          <span className="logo-chip">
+            <img src="/logovalleviejociudad.png" alt="Municipalidad de Valle Viejo" />
           </span>
-          <h2 className="font-display" style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--md-sys-color-on-surface)' }}>
-            Colonias de Verano
-          </h2>
-          <p style={{ fontSize: '0.88rem', color: 'var(--md-sys-color-on-surface-variant)', marginTop: '4px' }}>
-            Acceso para Administradores y Coordinadores Municipales
-          </p>
         </div>
+      </div>
+
+      <motion.main
+        className="gf-card gf-title-card login-card"
+        initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.23, 1, 0.32, 1] }}
+      >
+        <img src="/logocolonias.png" alt="Colonias de Verano" className="login-logo" />
+        <h1 style={{ fontSize: '1.6rem', fontWeight: 800, textAlign: 'center' }}>Panel de coordinación</h1>
+        <p style={{ textAlign: 'center', color: 'var(--ink-2)', marginTop: 6 }}>
+          Ingresá con tu correo y contraseña municipal.
+        </p>
+
+        <div className="lane-divider" style={{ margin: '20px 0' }} />
 
         {error && (
-          <div
+          <motion.div
+            className="notice danger"
             role="alert"
-            style={{
-              background: 'var(--md-sys-color-error-container)',
-              color: 'var(--md-sys-color-on-error-container)',
-              padding: '10px 14px',
-              borderRadius: 'var(--md-sys-shape-corner-medium)',
-              fontSize: '0.86rem',
-              fontWeight: 600,
-              marginBottom: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
+            style={{ marginBottom: 16 }}
+            initial={reduceMotion ? false : { opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
           >
-            ⚠️ {error}
-          </div>
+            <AlertCircle size={20} />
+            <span>{error}</span>
+          </motion.div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Campo Email */}
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>
-              Correo electrónico *
-            </span>
-            <div style={{ position: 'relative' }}>
-              <Mail size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--md-sys-color-on-surface-variant)', pointerEvents: 'none' }} />
-              <input
-                type="email"
-                value={email}
-                required
-                autoComplete="email"
-                placeholder="correo@ejemplo.com"
-                onChange={(e) => setEmail(e.target.value)}
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  padding: '12px 14px 12px 42px',
-                  borderRadius: '10px',
-                  border: '1.5px solid var(--md-sys-color-outline)',
-                  fontSize: '1rem',
-                  background: 'var(--md-sys-color-surface)',
-                  color: 'var(--md-sys-color-on-surface)',
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
-                }}
-                onFocus={e => e.target.style.borderColor = 'var(--md-sys-color-primary)'}
-                onBlur={e => e.target.style.borderColor = 'var(--md-sys-color-outline)'}
-              />
-            </div>
-          </label>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div className="md3-field">
+            <label className="md3-label" htmlFor="login-email">
+              Correo electrónico
+            </label>
+            <input
+              id="login-email"
+              className="md3-input"
+              type="email"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="email"
+              enterKeyHint="next"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
 
-          {/* Campo Contraseña */}
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>
-              Contraseña *
-            </span>
+          <div className="md3-field">
+            <label className="md3-label" htmlFor="login-pass">
+              Contraseña
+            </label>
             <div style={{ position: 'relative' }}>
-              <Lock size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--md-sys-color-on-surface-variant)', pointerEvents: 'none' }} />
               <input
-                type="password"
-                value={password}
-                required
+                id="login-pass"
+                className="md3-input"
+                style={{ paddingRight: 52 }}
+                type={verPassword ? 'text' : 'password'}
                 autoComplete="current-password"
-                placeholder="••••••••"
+                enterKeyHint="go"
+                value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  padding: '12px 14px 12px 42px',
-                  borderRadius: '10px',
-                  border: '1.5px solid var(--md-sys-color-outline)',
-                  fontSize: '1rem',
-                  background: 'var(--md-sys-color-surface)',
-                  color: 'var(--md-sys-color-on-surface)',
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
-                }}
-                onFocus={e => e.target.style.borderColor = 'var(--md-sys-color-primary)'}
-                onBlur={e => e.target.style.borderColor = 'var(--md-sys-color-outline)'}
+                required
               />
+              <button
+                type="button"
+                className="pass-toggle"
+                onClick={() => setVerPassword((v) => !v)}
+                aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {verPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
             </div>
-          </label>
+          </div>
 
-          {/* Botón submit */}
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '14px',
-              borderRadius: '24px',
-              border: 'none',
-              background: loading ? 'var(--md-sys-color-outline)' : 'var(--md-sys-color-primary)',
-              color: '#fff',
-              fontSize: '1rem',
-              fontWeight: 700,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'background 0.2s, opacity 0.2s',
-              opacity: loading ? 0.7 : 1
-            }}
-          >
-            <LogIn size={18} />
-            {loading ? 'Ingresando...' : 'Ingresar al Panel'}
+          <button type="submit" className="md3-btn md3-btn-filled md3-btn-big" disabled={loading} style={{ width: '100%', marginTop: 4 }}>
+            {loading ? <Loader2 size={20} className="spin" /> : <LogIn size={20} />}
+            {loading ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
 
-        <div style={{ marginTop: '18px', textAlign: 'center' }}>
-          <Link
-            to="/inscripcion"
-            style={{
-              fontSize: '0.86rem',
-              color: 'var(--md-sys-color-primary)',
-              fontWeight: 600,
-              textDecoration: 'none',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <ArrowLeft size={15} /> Ir al Formulario Público de Padres
+        <div style={{ marginTop: 18, textAlign: 'center' }}>
+          <Link to="/inscripcion" className="md3-btn md3-btn-text">
+            <ArrowLeft size={18} /> Ir al formulario de inscripción
           </Link>
         </div>
-      </motion.div>
-
+      </motion.main>
     </div>
   );
 }

@@ -255,6 +255,42 @@ async function initDatabase() {
   }
   dbInstance.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_inscripciones_token ON inscripciones(token_publico)');
 
+  // Migración: avisos con fecha de fin y con la marca de si suspenden la colonia
+  const colsAlertas = queryAll('PRAGMA table_info(alertas)').map((c) => c.name);
+  if (!colsAlertas.includes('vence')) {
+    // NULL = sigue hasta que alguien la levanta; 'YYYY-MM-DD' = se termina sola al pasar ese día
+    dbInstance.run('ALTER TABLE alertas ADD COLUMN vence TEXT');
+  }
+  if (!colsAlertas.includes('suspende')) {
+    dbInstance.run('ALTER TABLE alertas ADD COLUMN suspende INTEGER DEFAULT 1');
+  }
+  if (!colsAlertas.includes('finalizada_at')) {
+    dbInstance.run('ALTER TABLE alertas ADD COLUMN finalizada_at TEXT');
+  }
+  if (!colsAlertas.includes('colonias')) {
+    // Aviso para varias localidades: ids separados por coma. NULL = usa colonia_id (una sola) o todas si también es NULL.
+    dbInstance.run('ALTER TABLE alertas ADD COLUMN colonias TEXT');
+  }
+
+  // Migración: consentimiento del adulto para recibir avisos por WhatsApp (NULL = inscripción anterior, no se preguntó)
+  const colsPadre = queryAll('PRAGMA table_info(datos_padre)').map((c) => c.name);
+  if (!colsPadre.includes('acepta_whatsapp')) {
+    dbInstance.run('ALTER TABLE datos_padre ADD COLUMN acepta_whatsapp INTEGER');
+  }
+
+  // Nombres cortos de las localidades (solo cambia los nombres largos originales; si alguien los editó, no se tocan)
+  const NOMBRES_CORTOS = [
+    ['Predio de UTHGRA', 'UTHGRA', 'Predio Recreativo y Deportivo UTHGRA'],
+    ['SUM de Las Tejas', 'Las Tejas', 'Salón de Usos Múltiples (SUM) Las Tejas']
+  ];
+  for (const [largo, corto, sedeLarga] of NOMBRES_CORTOS) {
+    dbInstance.run('UPDATE colonias SET nombre = ? WHERE nombre = ?', [corto, largo]);
+    dbInstance.run('UPDATE colonias SET sede = ? WHERE sede = ?', [corto, sedeLarga]);
+  }
+
+  // Ajustes simples del sistema (por ejemplo, el link de la Comunidad de WhatsApp)
+  dbInstance.run('CREATE TABLE IF NOT EXISTS configuracion (clave TEXT PRIMARY KEY, valor TEXT, updated_at TEXT)');
+
   // Usuario administrador inicial
   const IS_PROD = process.env.NODE_ENV === 'production';
   const userCount = queryOne('SELECT COUNT(*) as count FROM usuarios');
@@ -293,8 +329,8 @@ async function initDatabase() {
   if (!coloniaCount || coloniaCount.count === 0) {
     const coloniasSeed = [
       [
-        'Predio de UTHGRA',
-        'Predio Recreativo y Deportivo UTHGRA',
+        'UTHGRA',
+        'UTHGRA',
         'Avenida de Circunvalación Dr. Néstor C. Kirchner, Valle Viejo',
         'Sede Principal de las Colonias de Verano de la Municipalidad de Valle Viejo. Actividades recreativas, natación, deportes en equipo y control de salud integral.',
         'Mañana (08:30 a 12:30 hs)',
@@ -305,8 +341,8 @@ async function initDatabase() {
         (new Date().getFullYear()).toString() + '-02-21'
       ],
       [
-        'SUM de Las Tejas',
-        'Salón de Usos Múltiples (SUM) Las Tejas',
+        'Las Tejas',
+        'Las Tejas',
         'Localidad de Las Tejas, Valle Viejo',
         'Sede Principal en la localidad de Las Tejas. Actividades deportivas, recreativas, talleres integradores y control de salud integral.',
         'Mañana (08:30 a 12:30 hs)',

@@ -820,7 +820,7 @@ export default function GaleriaPanel({ colonias = [], isMobileView = false }) {
                 <option value="todas">📍 Todas las Localidades</option>
                 {colonias.map((c) => (
                   <option key={c.id} value={String(c.id)}>
-                    {c.nombre} — {c.sede}
+                    {c.nombre}
                   </option>
                 ))}
               </select>
@@ -955,7 +955,7 @@ CLOUDINARY_API_SECRET=tu_api_secret`}
                   <option value="">General (todas las localidades)</option>
                   {colonias.map((c) => (
                     <option key={c.id} value={String(c.id)}>
-                      {c.nombre} — {c.sede}
+                      {c.nombre}
                     </option>
                   ))}
                 </select>
@@ -1384,7 +1384,7 @@ CLOUDINARY_API_SECRET=tu_api_secret`}
                   <option value="">Todas las Localidades</option>
                   {colonias.map((c) => (
                     <option key={c.id} value={String(c.id)}>
-                      {c.nombre} — {c.sede}
+                      {c.nombre}
                     </option>
                   ))}
                 </select>

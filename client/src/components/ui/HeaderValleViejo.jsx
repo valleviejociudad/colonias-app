@@ -18,10 +18,9 @@ export default function HeaderValleViejo({ compact = false, showTemporada = true
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '14px',
-          background: 'linear-gradient(90deg, #0082a8 0%, #3aa6c9 52%, #ffffff 100%)',
+          background: 'linear-gradient(180deg, #0082a8 0%, #006494 100%)',
           padding: compact ? '12px 18px' : '16px 24px',
-          borderRadius: '12px',
-          border: '1px solid #bae6fd'
+          borderRadius: '12px'
         }}
       >
         {/* Left: Logo Deporte (Blanco sobre celeste institucional) */}
@@ -76,7 +75,7 @@ export default function HeaderValleViejo({ compact = false, showTemporada = true
           }}
         >
           <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>
-            🏖️ Colonia de Verano • Control de Salud Integral
+            Colonia de Verano · Control de Salud Integral
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.88rem' }}>
             {fecha && (

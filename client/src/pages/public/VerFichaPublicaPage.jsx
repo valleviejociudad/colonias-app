@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { FileQuestion } from 'lucide-react';
 import FichaMedicaVerticalView from '../../components/ficha/FichaMedicaVerticalView';
+import ComunidadWhatsAppCard from '../../components/ui/ComunidadWhatsAppCard';
 
 export default function VerFichaPublicaPage() {
   const { token } = useParams();
@@ -18,29 +20,39 @@ export default function VerFichaPublicaPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  if (loading) {
-    return (
-      <div style={{ padding: '48px', textAlign: 'center', color: '#006494', fontWeight: 700 }}>
-        Cargando Ficha Médica Oficial...
-      </div>
-    );
-  }
-
-  if (!ficha) {
-    return (
-      <div style={{ padding: '48px', textAlign: 'center' }}>
-        <h3>Ficha médica no encontrada</h3>
-        <button className="md3-btn md3-btn-filled" style={{ marginTop: '14px' }} onClick={() => navigate('/inscripcion')}>
-          Ir al Inicio
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="gf-page-wrapper">
+      <div className="gf-water no-print">
+        <div className="gf-water-logos">
+          <span className="logo-chip"><img src="/logodeporte.png" alt="Deporte Valle Viejo" /></span>
+          <span className="logo-chip">
+            <img src="/logovalleviejociudad.png" alt="Municipalidad de Valle Viejo" />
+          </span>
+        </div>
+      </div>
       <div className="gf-container" style={{ maxWidth: '1160px' }}>
-        <FichaMedicaVerticalView ficha={ficha} onBack={() => navigate(-1)} />
+        {loading ? (
+          <div className="gf-card" style={{ display: 'grid', gap: 12 }}>
+            <div className="skeleton" style={{ height: 28, width: '60%' }} />
+            <div className="skeleton" style={{ height: 180 }} />
+          </div>
+        ) : !ficha ? (
+          <div className="empty-state" style={{ maxWidth: 560, margin: '0 auto', width: '100%' }}>
+            <div className="empty-icon">
+              <FileQuestion size={30} />
+            </div>
+            <h3>No encontramos esta ficha</h3>
+            <p>Revisá que el link esté completo. Si el problema sigue, hablá con la coordinación de la colonia.</p>
+            <button className="md3-btn md3-btn-filled" onClick={() => navigate('/inscripcion')}>
+              Ir al formulario de inscripción
+            </button>
+          </div>
+        ) : (
+          <>
+            <ComunidadWhatsAppCard className="no-print" style={{ maxWidth: 770, width: '100%', margin: '0 auto 16px' }} />
+            <FichaMedicaVerticalView ficha={ficha} onBack={() => navigate(-1)} />
+          </>
+        )}
       </div>
     </div>
   );

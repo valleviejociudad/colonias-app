@@ -48,43 +48,43 @@ async function getTransporter() {
   }
 }
 
-async function enviarEmailSuspension({ destinatarios, titulo, mensaje, coloniaNombre }) {
+async function enviarEmailSuspension({ destinatarios, titulo, mensaje, coloniaNombre, fecha }) {
   const transporter = await getTransporter();
-  const resultados = [];
 
   if (!transporter) {
-    return {
-      modo: 'sin_configurar',
-      enviados: 0,
-      previewUrl: null
-    };
+    return { modo: 'sin_configurar', enviados: 0, fallidos: 0, previewUrl: null };
   }
 
+  const resultados = [];
   let previewUrl = null;
+  const enviados = new Set();
   for (const dest of destinatarios) {
-    if (!dest.email) continue;
+    const email = String(dest.email || '').trim().toLowerCase();
+    if (!email || enviados.has(email)) continue;
+    enviados.add(email);
+    const saludo = dest.nino_nombre
+      ? `Hola, ${esc(dest.apellido_nombre || '')}. Te escribimos por <strong>${esc(dest.nino_nombre)}</strong>.`
+      : `Hola, ${esc(dest.apellido_nombre || '')}.`;
     try {
       const info = await transporter.sendMail({
         from: process.env.SMTP_FROM || '"Colonias de Verano - Municipalidad de Valle Viejo" <deportes@valleviejo.gob.ar>',
-        to: dest.email,
-        subject: `⚠️ AVISO IMPORTANTE: ${titulo} - ${coloniaNombre || 'Colonias de Verano'}`,
+        to: email,
+        subject: `Aviso: ${titulo} · ${coloniaNombre || 'Colonias de Verano'}`,
         html: `
-          <div style="font-family: 'Segoe UI', Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; border-radius: 16px; overflow: hidden; border: 1px solid #e0e0e0;">
-            <div style="background: linear-gradient(135deg, #006494, #00a6fb); color: white; padding: 24px; text-align: center;">
-              <h2 style="margin: 0; font-size: 22px;">Municipalidad de Valle Viejo</h2>
-              <p style="margin: 6px 0 0; opacity: 0.9;">Subsecretaría de Deportes • Colonias de Verano</p>
+          <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; border-radius: 14px; overflow: hidden; border: 1px solid #c6dae4; color: #0f2430;">
+            <div style="background: #006494; color: #ffffff; padding: 22px 24px;">
+              <p style="margin: 0; font-size: 14px;">Municipalidad de Valle Viejo · Colonias de Verano</p>
+              <h2 style="margin: 6px 0 0; font-size: 21px;">Aviso${fecha ? ` del ${esc(fecha)}` : ''}</h2>
             </div>
             <div style="padding: 24px; background: #ffffff;">
-              <div style="background: #fff3cd; border-left: 5px solid #ff9800; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
-                <h3 style="margin: 0 0 8px; color: #b26a00;">${esc(titulo)}</h3>
-                <p style="margin: 0; color: #333; font-size: 15px; line-height: 1.5;">${escMultiline(mensaje)}</p>
+              <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">${saludo}</p>
+              <div style="background: #fff3d6; padding: 16px 18px; border-radius: 10px; margin-bottom: 18px;">
+                <p style="margin: 0 0 4px; font-size: 14px; color: #3d2400;">${esc(coloniaNombre || 'Todas las localidades')}</p>
+                <h3 style="margin: 0 0 8px; font-size: 18px; color: #3d2400;">${esc(titulo)}</h3>
+                <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #3d2400;">${escMultiline(mensaje)}</p>
               </div>
-              <p style="color: #555; font-size: 14px;">
-                Estimado/a <strong>${esc(dest.apellido_nombre || 'Padre/Madre/Tutor')}</strong>, le enviamos este comunicado oficial respecto a la localidad <strong>${esc(coloniaNombre || 'Todas las localidades')}</strong>.
-              </p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-              <p style="font-size: 12px; color: #888; text-align: center; margin: 0;">
-                Este es un mensaje automático del Sistema Digital de Colonias de Verano • Municipalidad de Valle Viejo.
+              <p style="margin: 0; font-size: 13px; color: #5a707b;">
+                Este correo lo manda el sistema de Colonias de Verano de la Municipalidad de Valle Viejo.
               </p>
             </div>
           </div>
@@ -93,15 +93,17 @@ async function enviarEmailSuspension({ destinatarios, titulo, mensaje, coloniaNo
       if (!previewUrl && nodemailer.getTestMessageUrl(info)) {
         previewUrl = nodemailer.getTestMessageUrl(info);
       }
-      resultados.push({ email: dest.email, ok: true });
+      resultados.push({ email, ok: true });
     } catch (err) {
-      resultados.push({ email: dest.email, ok: false, error: err.message });
+      console.error('No se pudo mandar un correo de aviso:', err.message);
+      resultados.push({ email, ok: false });
     }
   }
 
   return {
     modo: process.env.SMTP_HOST ? 'smtp_real' : 'ethereal_test',
-    enviados: resultados.filter(r => r.ok).length,
+    enviados: resultados.filter((r) => r.ok).length,
+    fallidos: resultados.filter((r) => !r.ok).length,
     previewUrl
   };
 }

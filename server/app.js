@@ -114,6 +114,26 @@ function escribeFichas(req, res, next) {
   next();
 }
 
+// Celular argentino -> 10 dígitos (código de área + número, sin 0 ni 15). null si no se puede interpretar.
+// Acepta "383 4512345", "0383 15 4512345", "+54 9 383 4512345", etc.
+function normalizarCelular(raw) {
+  let d = String(raw || '').replace(/\D/g, '');
+  if (d.startsWith('00')) d = d.slice(2);
+  if (d.startsWith('54') && d.length >= 12) d = d.slice(2);
+  if (d.startsWith('9') && d.length === 11) d = d.slice(1);
+  if (d.startsWith('0')) d = d.slice(1);
+  if (d.length === 12) {
+    // Sacar el "15" que va después del código de área (de 2 a 4 dígitos)
+    for (const i of [2, 3, 4]) {
+      if (d.substr(i, 2) === '15') {
+        d = d.slice(0, i) + d.slice(i + 2);
+        break;
+      }
+    }
+  }
+  return /^[1-9]\d{9}$/.test(d) ? d : null;
+}
+
 // Helper to build full medical record object
 function getFullInscripcionById(id) {
   const { queryOne } = getDb();
@@ -212,6 +232,7 @@ app.post('/api/auth/usuarios', authMiddleware, requireRole('admin'), (req, res) 
 // ==================== COLONIAS ROUTES ====================
 
 app.get('/api/colonias', (req, res) => {
+  vencerAlertas();
   const { queryAll } = getDb();
   const colonias = queryAll(`
     SELECT c.*,
@@ -397,6 +418,13 @@ app.post('/api/inscripciones', inscripcionLimiter, (req, res) => {
     return res.status(400).json({ error: 'Por favor completá los datos obligatorios del niño/a y del padre/madre/tutor.' });
   }
 
+  const celularPadre = normalizarCelular(padre.whatsapp || padre.telefono);
+  if (!celularPadre) {
+    return res.status(400).json({
+      error: 'Revisá tu celular: escribilo con código de área, sin 0 ni 15. Por ejemplo: 3834512345.'
+    });
+  }
+
   // Check duplicate DNI
   const dup = queryOne(
     `SELECT n.id FROM datos_nino n
@@ -441,21 +469,19 @@ app.post('/api/inscripciones', inscripcionLimiter, (req, res) => {
 
   const inscripcionId = insResult.lastInsertRowid;
 
-  const cleanWhatsapp = String(padre.whatsapp || padre.telefono || '').replace(/\D/g, '');
-  const formattedWhatsapp = cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`;
-
   runQuery(
-    `INSERT INTO datos_padre (inscripcion_id, apellido_nombre, parentesco, dni, telefono, whatsapp, email, contacto_urgencia)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO datos_padre (inscripcion_id, apellido_nombre, parentesco, dni, telefono, whatsapp, email, contacto_urgencia, acepta_whatsapp)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       inscripcionId,
       padre.apellido_nombre.trim(),
       padre.parentesco || 'Padre/Madre/Tutor',
       String(padre.dni || '').replace(/\D/g, ''),
-      padre.telefono || '',
-      formattedWhatsapp,
+      celularPadre,
+      `549${celularPadre}`,
       (padre.email || '').trim(),
-      padre.contacto_urgencia || padre.telefono || ''
+      padre.contacto_urgencia || padre.telefono || '',
+      padre.acepta_whatsapp === false ? 0 : 1
     ]
   );
 
@@ -690,155 +716,290 @@ app.delete('/api/inscripciones/:id', authMiddleware, requireRole('admin'), (req,
 
 // ==================== ALERTAS Y DIFUSIÓN (CLIMA / SUSPENSIONES) ====================
 
-app.get('/api/alertas', (req, res) => {
-  const { queryAll } = getDb();
-  const alertas = queryAll(`
-    SELECT a.*, c.nombre as colonia_nombre, c.sede as colonia_sede
-    FROM alertas a
-    LEFT JOIN colonias c ON c.id = a.colonia_id
-    ORDER BY a.id DESC
-  `);
-  res.json(alertas);
-});
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
-app.post('/api/alertas', authMiddleware, requireRole('admin'), async (req, res) => {
-  const { colonia_id, tipo, titulo, mensaje, suspender_colonia, enviar_email } = req.body;
-  const { queryAll, queryOne, runQuery, saveDatabase } = getDb();
+// "2026-01-12 08:30:00" -> "lunes 12 de enero" (las fechas de la base ya están en hora local)
+function fechaLarga(raw) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw || ''));
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return `${DIAS_SEMANA[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`;
+}
 
-  if (!titulo || !mensaje) {
-    return res.status(400).json({ error: 'Título y mensaje son obligatorios' });
+// Localidades que abarca un aviso: lista de ids, o null si es para todas
+function alcanceIds(alerta) {
+  if (alerta.colonias) {
+    return String(alerta.colonias)
+      .split(',')
+      .map(Number)
+      .filter((n) => n > 0);
   }
+  return alerta.colonia_id ? [Number(alerta.colonia_id)] : null;
+}
 
-  let coloniaNombre = 'Todas las Localidades Municipales';
-  if (colonia_id) {
-    const col = queryOne('SELECT * FROM colonias WHERE id = ?', [colonia_id]);
-    if (col) coloniaNombre = col.nombre;
-    if (suspender_colonia) {
-      runQuery('UPDATE colonias SET suspendida = 1, motivo_suspension = ? WHERE id = ?', [mensaje, colonia_id]);
+// Lo que manda el panel ([1, 3], "1,3" o un id suelto) -> ids válidos sin repetir; null si son todas.
+// Devuelve [] si no eligieron ninguna válida.
+function parsearAlcance(raw) {
+  if (raw === null || raw === undefined || raw === '' || raw === 'todas') return null;
+  const lista = Array.isArray(raw) ? raw : String(raw).split(',');
+  const pedidos = [...new Set(lista.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  const todas = getDb().queryAll('SELECT id FROM colonias').map((c) => c.id);
+  const ids = pedidos.filter((id) => todas.includes(id));
+  if (ids.length > 0 && ids.length === todas.length) return null;
+  return ids;
+}
+
+// Cada colonia queda suspendida solo si tiene un aviso activo que la suspende (propio o para todas las localidades)
+function recalcularSuspensiones() {
+  const { queryAll, runQuery } = getDb();
+  const suspensiones = queryAll('SELECT * FROM alertas WHERE activa = 1 AND suspende = 1 ORDER BY id DESC');
+  for (const col of queryAll('SELECT id FROM colonias')) {
+    const aviso = suspensiones.find((a) => {
+      const ids = alcanceIds(a);
+      return !ids || ids.includes(col.id);
+    });
+    if (aviso) {
+      runQuery('UPDATE colonias SET suspendida = 1, motivo_suspension = ? WHERE id = ?', [aviso.mensaje, col.id]);
+    } else {
+      runQuery('UPDATE colonias SET suspendida = 0, motivo_suspension = NULL WHERE id = ?', [col.id]);
     }
-  } else if (suspender_colonia) {
-    runQuery('UPDATE colonias SET suspendida = 1, motivo_suspension = ?', [mensaje]);
   }
+}
 
-  // Padres afectados: solo inscripciones activas; deduplicados por email (una familia con varios hijos recibe un solo correo)
-  const whereClause = colonia_id ? "WHERE i.colonia_id = ? AND i.estado = 'activo'" : "WHERE i.estado = 'activo'";
-  const params = colonia_id ? [colonia_id] : [];
+// Los avisos "solo por hoy" se terminan solos cuando pasa el día
+function vencerAlertas() {
+  const { queryOne, runQuery, saveDatabase } = getDb();
+  const hay = queryOne(
+    "SELECT COUNT(*) AS n FROM alertas WHERE activa = 1 AND vence IS NOT NULL AND vence < date('now', 'localtime')"
+  );
+  if (!hay || !hay.n) return;
+  runQuery(
+    "UPDATE alertas SET activa = 0, finalizada_at = datetime('now', 'localtime') WHERE activa = 1 AND vence IS NOT NULL AND vence < date('now', 'localtime')"
+  );
+  recalcularSuspensiones();
+  saveDatabase();
+}
 
-  const todasFilas = queryAll(
-    `SELECT p.apellido_nombre, p.telefono, p.whatsapp, p.email,
-            n.apellido_nombre as nino_nombre, c.nombre as colonia_nombre
+// Familias de las localidades elegidas (ids, o null = todas): una por teléfono/correo, con todos sus chicos juntos
+function familiasDe(ids) {
+  const { queryAll } = getDb();
+  const filas = queryAll(
+    `SELECT p.apellido_nombre, p.telefono, p.whatsapp, p.email, p.acepta_whatsapp,
+            n.apellido_nombre AS nino_nombre, c.nombre AS colonia_nombre
      FROM datos_padre p
      INNER JOIN inscripciones i ON i.id = p.inscripcion_id
      LEFT JOIN datos_nino n ON n.inscripcion_id = i.id
      LEFT JOIN colonias c ON c.id = i.colonia_id
-     ${whereClause}`,
-    params
+     WHERE i.estado = 'activo' ${ids ? `AND i.colonia_id IN (${ids.map(() => '?').join(', ') || 'NULL'})` : ''}
+     ORDER BY p.apellido_nombre`,
+    ids || []
   );
-
-  // Agrupar: un entry por email (mencionar todos los hijos en el correo)
-  const mapaEmail = new Map();
-  for (const fila of todasFilas) {
-    const key = (fila.email || '').trim().toLowerCase() || fila.telefono;
+  const mapa = new Map();
+  for (const f of filas) {
+    const cel = normalizarCelular(f.whatsapp || f.telefono);
+    // Quien dijo que no quiere WhatsApp no entra en la lista de envío uno por uno
+    const tel = cel && f.acepta_whatsapp !== 0 ? `549${cel}` : '';
+    const email = String(f.email || '').trim().toLowerCase();
+    const key = tel || email;
     if (!key) continue;
-    if (!mapaEmail.has(key)) {
-      mapaEmail.set(key, { ...fila, nino_nombres: [fila.nino_nombre] });
-    } else {
-      mapaEmail.get(key).nino_nombres.push(fila.nino_nombre);
+    if (!mapa.has(key)) {
+      mapa.set(key, { ...f, tel, email: email || null, ninos: f.nino_nombre ? [f.nino_nombre] : [] });
+    } else if (f.nino_nombre) {
+      mapa.get(key).ninos.push(f.nino_nombre);
     }
   }
-  const padres = Array.from(mapaEmail.values()).map(e => ({
-    ...e,
-    nino_nombre: e.nino_nombres.filter(Boolean).join(' y ')
-  }));
+  return Array.from(mapa.values()).map((f) => ({ ...f, nino_nombre: f.ninos.join(' y ') }));
+}
 
-  // Guardar la alerta ANTES de enviar mails (si el envío falla, la alerta queda registrada)
-  const ins = runQuery(
-    `INSERT INTO alertas (colonia_id, tipo, titulo, mensaje, activa, enviada_email, enviada_whatsapp, destinatarios_count, creado_por)
-     VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?)`,
-    [
-      colonia_id || null,
-      tipo || 'suspension',
-      titulo,
-      mensaje,
-      padres.length,
-      req.user ? req.user.nombre : 'Administrador'
-    ]
+function textoWhatsApp(alerta, coloniaNombre, familia) {
+  const fecha = fechaLarga(alerta.created_at);
+  const saludo = familia
+    ? `Hola ${familia.apellido_nombre}${familia.nino_nombre ? `, te escribimos por ${familia.nino_nombre}` : ''}.\n\n`
+    : '';
+  return (
+    `*Colonias de Verano · Municipalidad de Valle Viejo*\n` +
+    `Aviso del ${fecha} · ${coloniaNombre}\n\n` +
+    saludo +
+    `*${alerta.titulo}*\n${alerta.mensaje}`
   );
-  saveDatabase();
+}
 
-  // Links de WhatsApp: uno por familia (ya deduplicados)
-  const whatsappLinks = todasFilas.map(p => {
-    const num = String(p.whatsapp || p.telefono || '').replace(/\D/g, '');
-    const phone = num.startsWith('54') ? num : `549${num}`;
-    const texto = `⚠️ *COLONIAS DE VERANO - MUNICIPALIDAD DE VALLE VIEJO*\n\nHola *${p.apellido_nombre}* (tutor de *${p.nino_nombre}*):\n\n*${titulo}*\n${mensaje}\n\n📍 Localidad: *${p.colonia_nombre || coloniaNombre}*`;
-    return {
-      padre_nombre: p.apellido_nombre,
-      nino_nombre: p.nino_nombre,
-      telefono: p.telefono,
-      email: p.email,
-      colonia_nombre: p.colonia_nombre,
-      wa_link: `https://wa.me/${phone}?text=${encodeURIComponent(texto)}`
-    };
+function linksWhatsApp(familias, alerta, coloniaNombre) {
+  return familias
+    .filter((f) => f.tel)
+    .map((f) => {
+      const phone = f.tel;
+      return {
+        clave: f.tel,
+        padre_nombre: f.apellido_nombre,
+        nino_nombre: f.nino_nombre,
+        telefono: f.telefono || f.whatsapp,
+        colonia_nombre: f.colonia_nombre,
+        wa_link: `https://wa.me/${phone}?text=${encodeURIComponent(textoWhatsApp(alerta, coloniaNombre, f))}`
+      };
+    });
+}
+
+// null -> "Todas las localidades"; [1, 2] -> "UTHGRA y Las Tejas"
+function nombreAlcance(ids) {
+  if (!ids || ids.length === 0) return 'Todas las localidades';
+  const nombres = getDb()
+    .queryAll(`SELECT nombre FROM colonias WHERE id IN (${ids.map(() => '?').join(', ')}) ORDER BY id`, ids)
+    .map((c) => c.nombre);
+  if (nombres.length === 0) return 'Todas las localidades';
+  return nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+}
+
+// El panel y el cartel leen "colonia_nombre": para varias localidades va la lista completa (null = todas)
+function conAlcance(alerta) {
+  const ids = alcanceIds(alerta);
+  return { ...alerta, colonias_ids: ids, colonia_nombre: ids ? nombreAlcance(ids) : null };
+}
+
+// ==================== COMUNIDAD DE WHATSAPP ====================
+
+const LINK_COMUNIDAD_RE = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]{10,40}\/?$/;
+
+function linkComunidad() {
+  const row = getDb().queryOne("SELECT valor FROM configuracion WHERE clave = 'comunidad_whatsapp'");
+  return row && row.valor ? row.valor : null;
+}
+
+// Público: el formulario y la ficha muestran el link para unirse
+app.get('/api/comunidad', (req, res) => {
+  res.json({ link: linkComunidad() });
+});
+
+app.put('/api/comunidad', authMiddleware, requireRole('admin'), (req, res) => {
+  const link = String(req.body.link || '').trim();
+  if (link && !LINK_COMUNIDAD_RE.test(link)) {
+    return res.status(400).json({
+      error: 'Ese link no es de una Comunidad de WhatsApp. Tiene que empezar con https://chat.whatsapp.com/'
+    });
+  }
+  getDb().runQueryAndSave(
+    `INSERT INTO configuracion (clave, valor, updated_at) VALUES ('comunidad_whatsapp', ?, datetime('now', 'localtime'))
+     ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor, updated_at = excluded.updated_at`,
+    [link || null]
+  );
+  res.json({ link: link || null });
+});
+
+app.get('/api/alertas', (req, res) => {
+  vencerAlertas();
+  const { queryAll } = getDb();
+  const alertas = queryAll('SELECT * FROM alertas ORDER BY id DESC');
+  res.json(alertas.map(conAlcance));
+});
+
+// Cuántas familias recibirían un aviso, para mostrarlo antes de enviar
+app.get('/api/alertas/destinatarios', authMiddleware, requireRole('admin'), (req, res) => {
+  const ids = parsearAlcance(req.query.colonia_ids ?? req.query.colonia_id);
+  if (ids && ids.length === 0) return res.status(400).json({ error: 'Elegí al menos una localidad.' });
+  const familias = familiasDe(ids);
+  res.json({
+    familias: familias.length,
+    con_email: familias.filter((f) => f.email).length,
+    con_telefono: familias.filter((f) => f.tel).length
+  });
+});
+
+// Lista de WhatsApp de un aviso ya publicado (para retomarla después de recargar)
+app.get('/api/alertas/:id/whatsapp', authMiddleware, requireRole('admin'), (req, res) => {
+  const alerta = getDb().queryOne('SELECT * FROM alertas WHERE id = ?', [req.params.id]);
+  if (!alerta) return res.status(404).json({ error: 'No encontramos ese aviso.' });
+  const ids = alcanceIds(alerta);
+  const coloniaNombre = nombreAlcance(ids);
+  res.json({
+    comunidadLink: linkComunidad(),
+    mensaje: textoWhatsApp(alerta, coloniaNombre, null),
+    whatsappLinks: linksWhatsApp(familiasDe(ids), alerta, coloniaNombre)
+  });
+});
+
+app.post('/api/alertas', authMiddleware, requireRole('admin'), async (req, res) => {
+  const { colonia_ids, colonia_id, titulo, mensaje, suspender_colonia, enviar_email, duracion } = req.body;
+  const { queryOne, runQuery, saveDatabase } = getDb();
+
+  if (!String(titulo || '').trim() || !String(mensaje || '').trim()) {
+    return res.status(400).json({ error: 'Escribí el título y el mensaje del aviso.' });
+  }
+  // colonia_ids: lista de localidades (null = todas). colonia_id: forma vieja, una sola.
+  const ids = parsearAlcance(colonia_ids !== undefined ? colonia_ids : colonia_id);
+  if (ids && ids.length === 0) {
+    return res.status(400).json({ error: 'Elegí al menos una localidad de la lista.' });
+  }
+
+  const coloniaNombre = nombreAlcance(ids);
+  const suspende = suspender_colonia ? 1 : 0;
+  const familias = familiasDe(ids);
+  const hoy = queryOne("SELECT date('now', 'localtime') AS d").d;
+  const vence = duracion === 'hasta_levantar' ? null : hoy;
+
+  // Guardar el aviso ANTES de enviar correos (si el envío falla, el aviso queda registrado)
+  let alertaId;
+  getDb().transaction(() => {
+    const ins = runQuery(
+      `INSERT INTO alertas (colonia_id, colonias, tipo, titulo, mensaje, activa, suspende, vence, enviada_email, enviada_whatsapp, destinatarios_count, creado_por)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, 0, 0, ?, ?)`,
+      [
+        ids && ids.length === 1 ? ids[0] : null,
+        ids && ids.length > 1 ? ids.join(',') : null,
+        suspende ? 'suspension' : 'aviso',
+        String(titulo).trim(),
+        String(mensaje).trim(),
+        suspende,
+        vence,
+        familias.length,
+        req.user ? req.user.nombre : 'Administrador'
+      ]
+    );
+    alertaId = ins.lastInsertRowid;
+    recalcularSuspensiones();
   });
 
-  // Enviar correos (en segundo plano, sin bloquear la respuesta)
-  let emailResult = { modo: 'sin_configurar', enviados: 0, previewUrl: null };
-  if (enviar_email !== false && padres.length > 0) {
-    emailResult = await enviarEmailSuspension({ destinatarios: padres, titulo, mensaje, coloniaNombre });
-    // Actualizar el flag de email en la alerta según resultado real
-    if (emailResult.enviados > 0) {
-      runQuery('UPDATE alertas SET enviada_email = 1 WHERE id = ?', [ins.lastInsertRowid]);
+  const alerta = conAlcance(queryOne('SELECT * FROM alertas WHERE id = ?', [alertaId]));
+
+  const conEmail = familias.filter((f) => f.email);
+  let emailResult = { modo: 'no_pedido', enviados: 0, fallidos: 0, sin_email: familias.length - conEmail.length, previewUrl: null };
+  if (enviar_email !== false && conEmail.length > 0) {
+    const r = await enviarEmailSuspension({
+      destinatarios: conEmail,
+      titulo: alerta.titulo,
+      mensaje: alerta.mensaje,
+      coloniaNombre,
+      fecha: fechaLarga(alerta.created_at)
+    });
+    emailResult = { ...r, sin_email: familias.length - conEmail.length };
+    if (r.enviados > 0) {
+      runQuery('UPDATE alertas SET enviada_email = 1 WHERE id = ?', [alertaId]);
       saveDatabase();
     }
+  } else if (enviar_email !== false) {
+    emailResult.modo = 'sin_destinatarios';
   }
-
-  const alerta = queryOne(
-    `SELECT a.*, c.nombre as colonia_nombre
-     FROM alertas a
-     LEFT JOIN colonias c ON c.id = a.colonia_id
-     WHERE a.id = ?`,
-    [ins.lastInsertRowid]
-  );
 
   res.status(201).json({
     alerta,
     emailResult,
-    whatsappLinks
+    comunidadLink: linkComunidad(),
+    mensajeWhatsApp: textoWhatsApp(alerta, coloniaNombre, null),
+    whatsappLinks: linksWhatsApp(familias, alerta, coloniaNombre)
   });
 });
 
 app.put('/api/alertas/:id/desactivar', authMiddleware, requireRole('admin'), (req, res) => {
-  const { id } = req.params;
-  const { runQuery, queryOne, queryAll, saveDatabase } = getDb();
-  const alerta = queryOne('SELECT * FROM alertas WHERE id = ?', [id]);
-  saveDatabase();
+  const { queryOne, runQuery, transaction } = getDb();
+  const alerta = queryOne('SELECT * FROM alertas WHERE id = ?', [req.params.id]);
+  if (!alerta) return res.status(404).json({ error: 'No encontramos ese aviso. Recargá la página.' });
 
-  // Recalcular estado de suspensión colonia por colonia: queda suspendida solo si tiene otra alerta activa
-  if (alerta && alerta.colonia_id) {
-    const otraActiva = queryOne(
-      'SELECT id FROM alertas WHERE activa = 1 AND (colonia_id = ? OR colonia_id IS NULL)',
-      [alerta.colonia_id]
-    );
-    if (!otraActiva) {
-      runQuery('UPDATE colonias SET suspendida = 0, motivo_suspension = NULL WHERE id = ?', [alerta.colonia_id]);
-    }
-  } else {
-    // Era una alerta global: solo desuspender las que no tengan otra alerta activa (específica o global)
-    const otraGlobalActiva = queryOne('SELECT id FROM alertas WHERE activa = 1 AND colonia_id IS NULL');
-    if (!otraGlobalActiva) {
-      const todasCol = queryAll('SELECT id FROM colonias');
-      for (const col of todasCol) {
-        const otraEspecifica = queryOne(
-          'SELECT id FROM alertas WHERE activa = 1 AND colonia_id = ?',
-          [col.id]
-        );
-        if (!otraEspecifica) {
-          runQuery('UPDATE colonias SET suspendida = 0, motivo_suspension = NULL WHERE id = ?', [col.id]);
-        }
-      }
-    }
+  if (alerta.activa === 1) {
+    transaction(() => {
+      runQuery("UPDATE alertas SET activa = 0, finalizada_at = datetime('now', 'localtime') WHERE id = ?", [alerta.id]);
+      recalcularSuspensiones();
+    });
   }
-  saveDatabase();
   res.json({ ok: true });
 });
 

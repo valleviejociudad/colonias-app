@@ -1,35 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   Search,
   Phone,
   MessageCircle,
   FileText,
   CloudLightning,
-  Users,
   HeartPulse,
   Plus,
-  Copy,
-  Check,
   LogOut,
-  Smartphone,
   Edit3,
   Trash2,
-  Send,
-  Mail,
   ExternalLink,
   BarChart3,
   Images,
   ChevronDown,
-  X
+  X,
+  AlertCircle,
+  SearchX
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import HeaderValleViejo from '../../components/ui/HeaderValleViejo';
 import AlertaClimaticaBanner from '../../components/ui/AlertaClimaticaBanner';
 import FichaMedicaVerticalView from '../../components/ficha/FichaMedicaVerticalView';
 import EstadisticasPanel from '../../components/stats/EstadisticasPanel';
 import GaleriaPanel from '../../components/galeria/GaleriaPanel';
+import AvisosClimaPanel from '../../components/clima/AvisosClimaPanel';
 
 const PATOLOGIAS_KEYS = [
   { key: 'alergias', label: 'Alergia' },
@@ -40,34 +36,43 @@ const PATOLOGIAS_KEYS = [
   { key: 'asmas', label: 'Asma' },
   { key: 'diabetes', label: 'Diabetes' },
   { key: 'neurologicas', label: 'Neurológica' },
-  { key: 'oftalmologicas', label: 'Oftalmológica' },
-  { key: 'auditivas', label: 'Auditiva' },
+  { key: 'oftalmologicas', label: 'Vista' },
+  { key: 'auditivas', label: 'Oído' },
   { key: 'celiaquia', label: 'Celiaquía' },
   { key: 'discapacidad', label: 'Discapacidad' },
   { key: 'otras', label: 'Otra' }
 ];
 
+// Color de carril por localidad: se mantiene igual en filtros, filas y tarjetas
+// Sin celestes (se pierden en la banda de agua) ni los rojo/amarillo de las boyas ni los colores de estado.
+const LANE_COLORS = ['#8b6fd6', '#f07f2c', '#2bb5a0', '#e05a9a', '#c9d64a', '#b07a4f', '#5a7bea', '#d4a5e8'];
+
+const capitalizar = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+const EASE_OUT = [0.23, 1, 0.32, 1];
+const MotionLink = motion(Link);
+
 export default function AdminDashboardPage() {
   const { user, logout, authFetch } = useAuth();
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
 
-  const [activeTab, setActiveTab] = useState('fichas'); // 'fichas' | 'dashboard' | 'clima'
+  const [activeTab, setActiveTab] = useState('fichas');
   const [inscripciones, setInscripciones] = useState([]);
   const [colonias, setColonias] = useState([]);
-  const [estadisticas, setEstadisticas] = useState(null);
   const [alertas, setAlertas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshBanner, setRefreshBanner] = useState(0);
 
-  // Search & Filter states for Emergency Medical Finder
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedColoniaFilter, setSelectedColoniaFilter] = useState('todas');
+  // Filtro de Estadísticas: vive acá para no perderse al abrir una ficha y volver.
+  const [statsColonia, setStatsColonia] = useState('todas');
+  const scrollAlVolver = useRef(null);
 
-  // Selected medical record for full vertical view or edit
   const [fichaSeleccionada, setFichaSeleccionada] = useState(null);
   const [editModalFicha, setEditModalFicha] = useState(null);
 
-  // Mobile compact vertical list & accordion expansion state
   const [isMobileView, setIsMobileView] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth <= 900 : false
   );
@@ -81,41 +86,14 @@ export default function AdminDashboardPage() {
     return () => mediaQuery.removeEventListener('change', handleResize);
   }, []);
 
-  // Weather / Suspension Broadcast state
-  const [alertaForm, setAlertaForm] = useState({
-    colonia_id: '',
-    tipo: 'suspension',
-    titulo: 'Suspensión de Colonia por Mal Clima / Lluvia',
-    mensaje:
-      'Informamos a las familias que por razones climáticas y para resguardar la seguridad de los niños/as, hoy se suspenden las actividades de la colonia de verano.',
-    suspender_colonia: true,
-    enviar_email: true
-  });
-  const [difusionResultado, setDifusionResultado] = useState(null);
-  const [enviandoDifusion, setEnviandoDifusion] = useState(false);
   const [errorOperacion, setErrorOperacion] = useState(null);
-
-  // PWA Install Prompt & Link Copy
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showPwaGuide, setShowPwaGuide] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-
-  useEffect(() => {
-    const handler = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
 
   const cargarTodo = async () => {
     setLoading(true);
     try {
-      const [resIns, resCol, resEst, resAle] = await Promise.all([
+      const [resIns, resCol, resAle] = await Promise.all([
         authFetch('/api/inscripciones'),
         authFetch('/api/colonias'),
-        authFetch('/api/estadisticas'),
         authFetch('/api/alertas')
       ]);
 
@@ -125,18 +103,16 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      const [dataIns, dataCol, dataEst, dataAle] = await Promise.all([
-        resIns.json(),
-        resCol.json(),
-        resEst.json(),
-        resAle.json()
-      ]);
+      const [dataIns, dataCol, dataAle] = await Promise.all([resIns.json(), resCol.json(), resAle.json()]);
 
       if (Array.isArray(dataIns)) setInscripciones(dataIns);
       if (Array.isArray(dataCol)) setColonias(dataCol);
-      if (dataEst) setEstadisticas(dataEst);
       if (Array.isArray(dataAle)) setAlertas(dataAle);
     } catch (err) {
+      if (err?.code === 'UNAUTHORIZED') {
+        navigate('/login');
+        return;
+      }
       console.error(err);
     } finally {
       setLoading(false);
@@ -145,11 +121,8 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     cargarTodo();
-
     const handleVisibilityOrFocus = () => {
-      if (document.visibilityState === 'visible') {
-        cargarTodo();
-      }
+      if (document.visibilityState === 'visible') cargarTodo();
     };
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
@@ -157,38 +130,25 @@ export default function AdminDashboardPage() {
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCopyPublicLink = () => {
-    const url = window.location.origin + '/inscripcion';
-    navigator.clipboard.writeText(url);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
-  };
+  const laneColor = useMemo(() => {
+    const map = {};
+    colonias.forEach((c, i) => {
+      map[String(c.id)] = LANE_COLORS[i % LANE_COLORS.length];
+    });
+    return (id) => map[String(id)] || '#8aa5b2';
+  }, [colonias]);
 
-  const handleInstallPwa = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      setDeferredPrompt(null);
-    } else {
-      setShowPwaGuide(true);
-    }
-  };
-
-  // Helper to list active conditions for a child
-  const getPatologiasDeFicha = (item) => {
-    return PATOLOGIAS_KEYS.filter((p) => Number(item[`${p.key}_si`]) === 1).map((p) => ({
+  const getPatologiasDeFicha = (item) =>
+    PATOLOGIAS_KEYS.filter((p) => Number(item[`${p.key}_si`]) === 1).map((p) => ({
       label: p.label,
       detalle: item[`${p.key}_cual`]
     }));
-  };
 
-  // Filtered medical records
   const fichasFiltradas = inscripciones.filter((item) => {
-    if (selectedColoniaFilter !== 'todas' && String(item.colonia_id) !== String(selectedColoniaFilter)) {
-      return false;
-    }
+    if (selectedColoniaFilter !== 'todas' && String(item.colonia_id) !== String(selectedColoniaFilter)) return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -199,20 +159,31 @@ export default function AdminDashboardPage() {
     );
   });
 
+  const conteoPorColonia = useMemo(() => {
+    const m = {};
+    inscripciones.forEach((i) => {
+      m[String(i.colonia_id)] = (m[String(i.colonia_id)] || 0) + 1;
+    });
+    return m;
+  }, [inscripciones]);
+
   const handleEliminarFicha = async (id, nombre) => {
-    if (!window.confirm(`¿Estás seguro de eliminar la ficha médica de ${nombre}?`)) return;
+    if (!window.confirm(`¿Seguro que querés eliminar la ficha de ${nombre}? Esto no se puede deshacer.`)) return;
     try {
       setErrorOperacion(null);
       const res = await authFetch(`/api/inscripciones/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setErrorOperacion(data.error || `Error al eliminar la ficha de ${nombre}.`);
+        setErrorOperacion(data.error || `No se pudo eliminar la ficha de ${nombre}.`);
         return;
       }
       cargarTodo();
     } catch (err) {
-      if (err.code === 'UNAUTHORIZED') { navigate('/login'); return; }
-      setErrorOperacion('No se pudo eliminar la ficha. Intentá de nuevo.');
+      if (err.code === 'UNAUTHORIZED') {
+        navigate('/login');
+        return;
+      }
+      setErrorOperacion('No se pudo eliminar la ficha. Probá de nuevo.');
     }
   };
 
@@ -246,1048 +217,709 @@ export default function AdminDashboardPage() {
       });
       if (res.ok) {
         setEditModalFicha(null);
-        setErrorOperacion(null);
         cargarTodo();
       } else {
         const data = await res.json().catch(() => ({}));
-        setErrorOperacion(data.error || 'Error al guardar los cambios de la ficha.');
+        setErrorOperacion(data.error || 'No se pudieron guardar los cambios.');
       }
     } catch (err) {
-      if (err.code === 'UNAUTHORIZED') { navigate('/login'); return; }
-      setErrorOperacion('No se pudo guardar la ficha. Intentá de nuevo.');
-    }
-  };
-
-  const handleEnviarDifusion = async (e) => {
-    e.preventDefault();
-    setEnviandoDifusion(true);
-    setErrorOperacion(null);
-    try {
-      const res = await authFetch('/api/alertas', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...alertaForm,
-          colonia_id: alertaForm.colonia_id ? Number(alertaForm.colonia_id) : null
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setDifusionResultado(data);
-        cargarTodo();
-        setRefreshBanner((p) => p + 1);
-      } else {
-        setErrorOperacion(data.error || 'Error al enviar la difusión.');
-      }
-    } catch (err) {
-      if (err.code === 'UNAUTHORIZED') { navigate('/login'); return; }
-      setErrorOperacion('No se pudo enviar la difusión. Verificá tu conexión.');
-    } finally {
-      setEnviandoDifusion(false);
-    }
-  };
-
-  const handleDesactivarAlerta = async (id) => {
-    try {
-      setErrorOperacion(null);
-      const res = await authFetch(`/api/alertas/${id}/desactivar`, { method: 'PUT' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setErrorOperacion(data.error || 'Error al desactivar la alerta.');
+      if (err.code === 'UNAUTHORIZED') {
+        navigate('/login');
         return;
       }
-      cargarTodo();
-      setRefreshBanner((p) => p + 1);
-    } catch (err) {
-      if (err.code === 'UNAUTHORIZED') { navigate('/login'); return; }
-      setErrorOperacion('No se pudo desactivar la alerta. Intentá de nuevo.');
+      setErrorOperacion('No se pudo guardar la ficha. Probá de nuevo.');
     }
   };
 
   const navItems = [
-    { id: 'fichas', label: 'Fichas Médicas', shortLabel: 'Fichas', icon: HeartPulse },
+    { id: 'fichas', label: 'Fichas médicas', shortLabel: 'Fichas', icon: HeartPulse },
     { id: 'dashboard', label: 'Estadísticas', shortLabel: 'Estadísticas', icon: BarChart3 },
-    { id: 'clima', label: 'Clima & Alertas', shortLabel: 'Clima', icon: CloudLightning },
-    { id: 'galeria', label: 'Banco de Imágenes', shortLabel: 'Imágenes', icon: Images }
+    { id: 'clima', label: 'Avisos por clima', shortLabel: 'Avisos', icon: CloudLightning },
+    { id: 'galeria', label: 'Banco de imágenes', shortLabel: 'Imágenes', icon: Images }
   ];
+
+  const cambiarTab = (id) => {
+    setFichaSeleccionada(null);
+    setActiveTab(id);
+    const sc = document.querySelector('.app-main-scroll');
+    if (sc) sc.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0 });
+  };
+
+  const tabActual = navItems.find((n) => n.id === activeTab);
+  const hoy = capitalizar(new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }));
+
+  const tabMotion = reduceMotion
+    ? {}
+    : {
+        initial: { opacity: 0, y: 8 },
+        animate: { opacity: 1, y: 0 },
+        transition: { duration: 0.28, ease: EASE_OUT }
+      };
+
+  const contactos = (item) => {
+    const cleanPhone = String(item.padre_telefono || '').replace(/\D/g, '');
+    const cleanWa = String(item.padre_whatsapp || item.padre_telefono || '').replace(/\D/g, '');
+    const waNum = cleanWa.startsWith('54') ? cleanWa : `549${cleanWa}`;
+    return { tel: `tel:${cleanPhone}`, wa: `https://wa.me/${waNum}` };
+  };
 
   return (
     <div className="app-shell">
-      {/* ==================== NAVIGATION DRAWER (Material Design 3) ==================== */}
+      {/* ==================== NAVEGACIÓN LATERAL (PC) ==================== */}
       <aside className="app-navigation-rail no-print">
-        {/* Header con logo institucional */}
-        <div className="app-nav-header" style={{ justifyContent: 'center' }}>
-          <img
-            src="/logocolonias.png"
-            alt="Colonias de Verano"
-            style={{ height: '52px', width: 'auto', objectFit: 'contain', display: 'block' }}
-          />
+        <div className="app-nav-header">
+          <div className="logo-plate">
+            <img src="/logocolonias.png" alt="Colonias de Verano" style={{ height: 52, width: 'auto', display: 'block' }} />
+          </div>
         </div>
 
-        {/* Navigation List */}
-        <nav className="app-nav-list">
+        <nav className="app-nav-list" aria-label="Secciones del panel">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeTab === item.id;
             return (
               <button
                 key={item.id}
-                onClick={() => {
-                  setFichaSeleccionada(null);
-                  setActiveTab(item.id);
-                }}
+                onClick={() => cambiarTab(item.id)}
                 className={`app-nav-item ${active ? 'active' : ''}`}
+                aria-current={active ? 'page' : undefined}
               >
+                {active && (
+                  <motion.span
+                    layoutId="nav-pill"
+                    className="nav-pill"
+                    transition={reduceMotion ? { duration: 0 } : { type: 'spring', duration: 0.4, bounce: 0.15 }}
+                  />
+                )}
                 <Icon size={20} className="nav-icon" />
                 <span>{item.label}</span>
               </button>
             );
           })}
 
-          <div className="app-nav-divider" />
+          <div className="lane-divider app-nav-divider" />
 
-          <Link
-            to="/inscripcion"
-            target="_blank"
-            className="app-nav-item"
-            style={{ color: 'var(--md-sys-color-primary)' }}
-          >
+          <Link to="/inscripcion" target="_blank" className="app-nav-item">
             <ExternalLink size={18} />
-            <span>Ver Formulario Padres</span>
+            <span>Ver formulario de padres</span>
           </Link>
         </nav>
 
-        {/* User Footer */}
         <div className="app-nav-footer">
           <div className="app-nav-user-card">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-              <div className="app-nav-avatar">
-                {(user?.nombre || 'AD').substring(0, 2).toUpperCase()}
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+              <div className="app-nav-avatar">{(user?.nombre || 'AD').substring(0, 2).toUpperCase()}</div>
               <div style={{ overflow: 'hidden' }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--md-sys-color-on-surface)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    color: '#fff',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    fontSize: '0.95rem'
+                  }}
+                >
                   {user?.nombre}
                 </div>
                 <span className="role-badge">{user?.rol}</span>
               </div>
             </div>
             <button
+              className="icon-btn"
               onClick={() => {
                 logout();
                 navigate('/login');
               }}
-              style={{
-                background: 'var(--md-sys-color-error-container)',
-                color: 'var(--md-sys-color-on-error-container)',
-                border: 'none',
-                borderRadius: '10px',
-                padding: '8px',
-                cursor: 'pointer',
-                flexShrink: 0
-              }}
               title="Cerrar sesión"
+              aria-label="Cerrar sesión"
             >
-              <LogOut size={16} />
+              <LogOut size={18} />
             </button>
           </div>
         </div>
       </aside>
 
-      {/* ==================== MAIN CONTENT AREA ==================== */}
+      {/* ==================== CONTENIDO ==================== */}
       <div className="app-main-content">
-        {/* Top App Bar */}
-        <header
-          className="app-top-bar no-print"
-          style={isMobileView ? { justifyContent: 'center' } : undefined}
-        >
-          {/* Logos institucionales — centrados en mobile, izquierda en desktop */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-            <img
-              src="/logodeporte.png"
-              alt="Deporte Valle Viejo"
-              style={{ height: '36px', width: 'auto', objectFit: 'contain', display: 'block' }}
-            />
-            <div style={{ width: '1px', height: '28px', background: 'var(--md-sys-color-outline-variant)' }} />
-            <img
-              src={isMobileView ? '/logocolonias.png' : '/logovalleviejociudad.png'}
-              alt={isMobileView ? 'Colonias de Verano' : 'Valle Viejo Ciudad'}
-              style={{ height: isMobileView ? '38px' : '34px', width: 'auto', objectFit: 'contain', display: 'block' }}
-            />
-          </div>
+        <header className="app-top-bar no-print">
+          {isMobileView ? (
+            <>
+              <div className="logo-row">
+                <span className="plate">
+                  <img src="/logocolonias.png" alt="Colonias de Verano" style={{ height: 32, width: 'auto', display: 'block' }} />
+                </span>
+              </div>
+              <div style={{ textAlign: 'right', minWidth: 0 }}>
+                <div className="top-title" style={{ fontSize: '1.05rem' }}>
+                  {fichaSeleccionada ? 'Ficha médica' : tabActual?.label}
+                </div>
+              </div>
+              <button
+                className="icon-btn"
+                onClick={() => {
+                  if (window.confirm('¿Cerrar sesión?')) {
+                    logout();
+                    navigate('/login');
+                  }
+                }}
+                aria-label="Cerrar sesión"
+              >
+                <LogOut size={18} />
+              </button>
+            </>
+          ) : (
+            <>
+              <div>
+                <div className="top-title">{fichaSeleccionada ? 'Ficha médica' : tabActual?.label}</div>
+                <div className="top-sub">
+                  {hoy}
+                </div>
+              </div>
+              <div className="logo-row">
+                <span className="plate">
+                  <img src="/logodeporte.png" alt="Deporte Valle Viejo" style={{ height: 30, width: 'auto', display: 'block' }} />
+                </span>
+                <span className="plate">
+                  <img src="/logovalleviejociudad.png" alt="Municipalidad de Valle Viejo" style={{ height: 30, width: 'auto', display: 'block' }} />
+                </span>
+              </div>
+            </>
+          )}
         </header>
 
-        {/* Scrollable Page Content */}
         <main className="app-main-scroll">
-          {/* Active Weather / Suspension Alert Banner */}
-          <AlertaClimaticaBanner refreshTrigger={refreshBanner} />
+          {activeTab !== 'clima' && <AlertaClimaticaBanner refreshTrigger={refreshBanner} />}
 
-        {/* If a single medical sheet is selected, show the Vertical Official Planilla */}
-        {fichaSeleccionada ? (
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <FichaMedicaVerticalView
-              ficha={fichaSeleccionada}
-              onBack={() => setFichaSeleccionada(null)}
-            />
-          </motion.div>
-        ) : (
-          <>
-            {/* ==================== TAB 1: BUSCADOR DE URGENCIAS Y FICHAS MÉDICAS ==================== */}
-            {activeTab === 'fichas' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                {/* Hero Search & Emergency Filter Banner */}
-                <div className="hero-banner">
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      flexWrap: isMobileView ? 'nowrap' : 'wrap',
-                      gap: isMobileView ? '8px' : '12px',
-                      marginBottom: isMobileView ? '12px' : '18px'
-                    }}
-                  >
+          {errorOperacion && (
+            <div className="notice danger" role="alert" style={{ marginBottom: 14 }}>
+              <AlertCircle size={20} />
+              <span style={{ flex: 1 }}>{errorOperacion}</span>
+              <button className="tool-btn danger" style={{ width: 36, height: 36 }} onClick={() => setErrorOperacion(null)} aria-label="Cerrar aviso">
+                <X size={16} />
+              </button>
+            </div>
+          )}
+
+          {fichaSeleccionada ? (
+            <motion.div key="ficha" {...tabMotion}>
+              <FichaMedicaVerticalView
+                ficha={fichaSeleccionada}
+                onBack={() => {
+                  setFichaSeleccionada(null);
+                  const y = scrollAlVolver.current;
+                  scrollAlVolver.current = null;
+                  if (y !== null) {
+                    // Volver al mismo lugar de Estadísticas desde donde se abrió la ficha
+                    setTimeout(() => {
+                      const sc = document.querySelector('.app-main-scroll');
+                      if (sc) sc.scrollTo({ top: y });
+                      window.scrollTo({ top: y });
+                    }, 60);
+                  }
+                }}
+              />
+            </motion.div>
+          ) : (
+            <>
+              {/* ==================== FICHAS ==================== */}
+              {activeTab === 'fichas' && (
+                <motion.div key="fichas" {...tabMotion}>
+                  <section className="hero-banner" aria-label="Buscar fichas">
                     <div
                       style={{
                         display: 'flex',
+                        justifyContent: 'space-between',
                         alignItems: 'center',
-                        justifyContent: isMobileView ? 'space-between' : 'flex-start',
-                        gap: isMobileView ? '8px' : '12px',
-                        width: isMobileView ? '100%' : 'auto'
+                        gap: 12,
+                        marginBottom: 14,
+                        flexWrap: 'wrap'
                       }}
                     >
-                      <h2
-                        className="font-display"
-                        style={{
-                          fontSize: isMobileView ? '1.14rem' : '1.5rem',
-                          fontWeight: 800,
-                          color: '#fff',
-                          lineHeight: 1.2
-                        }}
-                      >
-                        Fichas Médicas Digitales
-                      </h2>
-                      <span
-                        style={{
-                          padding: isMobileView ? '4px 10px' : '4px 12px',
-                          background: 'rgba(255,255,255,0.2)',
-                          borderRadius: '999px',
-                          fontSize: isMobileView ? '0.74rem' : '0.8rem',
-                          fontWeight: 600,
-                          whiteSpace: 'nowrap',
-                          flexShrink: 0,
-                          backdropFilter: 'blur(4px)'
-                        }}
-                      >
-                        {fichasFiltradas.length} registradas
-                      </span>
-                    </div>
-                    {!isMobileView && (
-                      <Link
-                        to="/inscripcion"
-                        className="md3-btn"
-                        style={{ background: '#ffffff', color: 'var(--md-sys-color-primary)', fontWeight: 700, fontSize: '0.86rem' }}
-                      >
-                        <Plus size={16} /> Cargar Nueva Ficha
-                      </Link>
-                    )}
-                  </div>
-
-                  {/* Instant Search Bar */}
-                  <div
-                    className="hero-search-bar"
-                    style={
-                      isMobileView
-                        ? {
-                            height: '46px',
-                            borderRadius: '14px',
-                            padding: '0 14px',
-                            boxShadow: '0 2px 8px rgba(0, 30, 48, 0.14)'
-                          }
-                        : undefined
-                    }
-                  >
-                    <Search size={isMobileView ? 18 : 20} color="var(--md-sys-color-primary)" style={{ flexShrink: 0 }} />
-                    <input
-                      type="text"
-                      placeholder={
-                        isMobileView
-                          ? 'Buscar por nombre, DNI o Nº ficha...'
-                          : 'Buscar rápido por Nombre del Niño/a, DNI, Apellido del Padre o Nº de Ficha...'
-                      }
-                      style={isMobileView ? { fontSize: '0.88rem' } : undefined}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    {searchQuery && (
-                      <button
-                        onClick={() => setSearchQuery('')}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}
-                      >
-                        <X size={18} />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Filter Chips */}
-                  {isMobileView ? (
-                    <div
-                      style={{
-                        marginTop: '12px',
-                        paddingTop: '10px',
-                        borderTop: '1px solid rgba(255,255,255,0.18)'
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: '0.68rem',
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          color: 'rgba(255,255,255,0.85)',
-                          marginBottom: '6px'
-                        }}
-                      >
-                        Filtrar por localidad
+                      <div>
+                        <h2 style={{ fontSize: isMobileView ? '1.3rem' : '1.6rem', fontWeight: 800 }}>
+                          Buscar un niño o niña
+                        </h2>
+                        <p style={{ opacity: 0.92, marginTop: 2, fontSize: '0.98rem' }}>
+                          {loading ? 'Cargando fichas…' : `${inscripciones.length} fichas cargadas en total`}
+                        </p>
                       </div>
-                      <div className="hero-chips-mobile">
+                      {!isMobileView && (
+                        <Link to="/inscripcion" className="md3-btn" style={{ background: '#fff', color: 'var(--pool-ink)' }}>
+                          <Plus size={18} /> Cargar nueva ficha
+                        </Link>
+                      )}
+                    </div>
+
+                    <div className="hero-search-bar">
+                      <Search size={22} color="var(--pool)" style={{ flexShrink: 0 }} />
+                      <input
+                        type="search"
+                        enterKeyHint="search"
+                        aria-label="Buscar por nombre, DNI, tutor o número de ficha"
+                        placeholder={isMobileView ? 'Nombre, DNI o Nº de ficha' : 'Escribí nombre del niño/a, DNI, nombre del tutor o Nº de ficha'}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                      {searchQuery && (
                         <button
-                          onClick={() => setSelectedColoniaFilter('todas')}
-                          className={`hero-chip ${selectedColoniaFilter === 'todas' ? 'active' : ''}`}
+                          className="tool-btn"
+                          style={{ width: 36, height: 36, background: 'transparent' }}
+                          onClick={() => setSearchQuery('')}
+                          aria-label="Borrar búsqueda"
                         >
-                          <Users size={13} />
-                          Todas ({inscripciones.length})
+                          <X size={18} />
                         </button>
-                        {colonias.map((c) => (
-                          <button
-                            key={c.id}
-                            onClick={() => setSelectedColoniaFilter(String(c.id))}
-                            className={`hero-chip ${String(selectedColoniaFilter) === String(c.id) ? 'active' : ''}`}
-                          >
-                            {c.nombre}
-                          </button>
-                        ))}
-                      </div>
+                      )}
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
+
+                    <div
+                      className={isMobileView ? 'hero-chips-mobile' : ''}
+                      style={isMobileView ? { marginTop: 12 } : { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14, paddingBottom: 2 }}
+                      role="group"
+                      aria-label="Filtrar por localidad"
+                    >
                       <button
                         onClick={() => setSelectedColoniaFilter('todas')}
                         className={`hero-chip ${selectedColoniaFilter === 'todas' ? 'active' : ''}`}
+                        aria-pressed={selectedColoniaFilter === 'todas'}
                       >
-                        <Users size={14} />
-                        Todas las Localidades ({inscripciones.length})
+                        Todas ({inscripciones.length})
                       </button>
                       {colonias.map((c) => (
                         <button
                           key={c.id}
                           onClick={() => setSelectedColoniaFilter(String(c.id))}
                           className={`hero-chip ${String(selectedColoniaFilter) === String(c.id) ? 'active' : ''}`}
+                          aria-pressed={String(selectedColoniaFilter) === String(c.id)}
                         >
-                          {c.nombre}
+                          <span className="lane-swatch" style={{ background: laneColor(c.id) }} />
+                          {c.nombre} ({conteoPorColonia[String(c.id)] || 0})
                         </button>
                       ))}
                     </div>
-                  )}
-                </div>
+                  </section>
 
-                {/* Medical Cards Grid */}
-                {loading ? (
-                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--md-sys-color-on-surface-variant)' }}>
-                    Cargando fichas médicas...
-                  </div>
-                ) : fichasFiltradas.length === 0 ? (
-                  <div className="gf-card" style={{ textAlign: 'center', padding: '40px' }}>
-                    <p style={{ fontSize: '1.05rem', color: 'var(--md-sys-color-on-surface-variant)' }}>
-                      No se encontraron niños/as con ese criterio de búsqueda.
+                  {(searchQuery || selectedColoniaFilter !== 'todas') && !loading && (
+                    <p style={{ margin: '0 4px 10px', color: 'var(--ink-2)' }}>
+                      {fichasFiltradas.length === 1 ? '1 resultado' : `${fichasFiltradas.length} resultados`}
                     </p>
-                  </div>
-                ) : (
-                  <div
-                    style={
-                      isMobileView
-                        ? { display: 'flex', flexDirection: 'column', gap: '10px' }
-                        : {
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-                            gap: '16px'
-                          }
-                    }
-                  >
-                    {fichasFiltradas.map((item) => {
-                      const patologias = getPatologiasDeFicha(item);
-                      const cleanPhone = String(item.padre_telefono || '').replace(/\D/g, '');
-                      const cleanWa = String(item.padre_whatsapp || item.padre_telefono || '').replace(/\D/g, '');
-                      const waNum = cleanWa.startsWith('54') ? cleanWa : `549${cleanWa}`;
-                      const isMobileExpanded = expandedMobileCardId === item.id;
+                  )}
 
-                      // Unified Mobile Accordion Card (smooth height/opacity reveal without FLIP scale distortion)
-                      if (isMobileView) {
+                  {loading && inscripciones.length === 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {[0, 1, 2, 3].map((i) => (
+                        <div key={i} className="skeleton" style={{ height: 72 }} />
+                      ))}
+                    </div>
+                  ) : fichasFiltradas.length === 0 ? (
+                    <div className="empty-state">
+                      <div className="empty-icon">
+                        <SearchX size={30} />
+                      </div>
+                      <h3>{inscripciones.length === 0 ? 'Todavía no hay fichas' : 'No encontramos a nadie con esa búsqueda'}</h3>
+                      <p>
+                        {inscripciones.length === 0
+                          ? 'Cuando las familias completen el formulario, las fichas aparecen acá.'
+                          : 'Revisá cómo está escrito el nombre o probá con el DNI. También podés ver todas las localidades.'}
+                      </p>
+                      {(searchQuery || selectedColoniaFilter !== 'todas') && (
+                        <button
+                          className="md3-btn md3-btn-tonal"
+                          onClick={() => {
+                            setSearchQuery('');
+                            setSelectedColoniaFilter('todas');
+                          }}
+                        >
+                          Limpiar búsqueda
+                        </button>
+                      )}
+                    </div>
+                  ) : isMobileView ? (
+                    /* ----- Celular: tarjetas desplegables ----- */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {fichasFiltradas.map((item, idx) => {
+                        const patologias = getPatologiasDeFicha(item);
+                        const { tel, wa } = contactos(item);
+                        const open = expandedMobileCardId === item.id;
                         return (
-                          <div
+                          <motion.div
                             key={item.id}
-                            className={`medical-card ${patologias.length > 0 ? 'has-alert' : 'no-alert'}`}
+                            className="medical-card"
+                            initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.26, ease: EASE_OUT, delay: Math.min(idx, 8) * 0.03 }}
                           >
-                            {/* Stable Clickable Header */}
-                            <div
-                              onClick={() => setExpandedMobileCardId(isMobileExpanded ? null : item.id)}
-                              style={{
-                                padding: '13px 14px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: '10px',
-                                cursor: 'pointer',
-                                userSelect: 'none'
-                              }}
+                            <button
+                              className="medical-card-head"
+                              onClick={() => setExpandedMobileCardId(open ? null : item.id)}
+                              aria-expanded={open}
                             >
-                              <div style={{ minWidth: 0, flex: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <span
-                                    className="font-display"
-                                    style={{
-                                      fontSize: '0.98rem',
-                                      fontWeight: 800,
-                                      color: 'var(--md-sys-color-on-surface)',
-                                      whiteSpace: 'nowrap',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis'
-                                    }}
-                                  >
-                                    {item.nino_nombre}
-                                  </span>
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '0.78rem',
-                                    color: 'var(--md-sys-color-on-surface-variant)',
-                                    marginTop: '2px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    flexWrap: 'wrap'
-                                  }}
-                                >
-                                  <span><strong>DNI:</strong> {item.nino_dni}</span>
-                                  <span>•</span>
-                                  <span style={{ color: 'var(--md-sys-color-primary)', fontWeight: 600 }}>{item.colonia_nombre}</span>
-                                </div>
-                              </div>
+                              <span
+                                className={`health-mark ${patologias.length ? 'alert' : 'clear'}`}
+                                title={patologias.length ? 'Tiene condiciones de salud' : 'Sin condiciones de salud'}
+                              />
+                              <span style={{ flex: 1, minWidth: 0 }}>
+                                <span className="fichas-name" style={{ display: 'block' }}>
+                                  {item.nino_nombre}
+                                </span>
+                                <span className="fichas-sub" style={{ display: 'block', marginTop: 2 }}>
+                                  DNI {item.nino_dni} · {item.edad} años
+                                </span>
+                                <span className="lane-tag" style={{ marginTop: 2, fontWeight: 400 }}>
+                                  <span className="lane-swatch" style={{ background: laneColor(item.colonia_id) }} />
+                                  <span>{item.colonia_nombre}</span>
+                                </span>
+                              </span>
+                              <span className={`chevron ${open ? 'open' : ''}`}>
+                                <ChevronDown size={20} />
+                              </span>
+                            </button>
 
-                              <div
-                                style={{
-                                  width: '32px',
-                                  height: '32px',
-                                  borderRadius: '999px',
-                                  background: isMobileExpanded
-                                    ? 'var(--md-sys-color-primary-container)'
-                                    : 'var(--md-sys-color-surface-container)',
-                                  color: 'var(--md-sys-color-primary)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  flexShrink: 0,
-                                  transform: isMobileExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                  transition: 'transform 0.24s cubic-bezier(0.2, 0, 0, 1), background-color 0.2s ease'
-                                }}
-                              >
-                                <ChevronDown size={18} />
-                              </div>
-                            </div>
-
-                            {/* Smooth Accordion Body */}
                             <AnimatePresence initial={false}>
-                              {isMobileExpanded && (
+                              {open && (
                                 <motion.div
-                                  key="mobile-accordion-content"
+                                  key="body"
                                   initial={{ height: 0, opacity: 0 }}
                                   animate={{ height: 'auto', opacity: 1 }}
                                   exit={{ height: 0, opacity: 0 }}
-                                  transition={{
-                                    height: { duration: 0.24, ease: [0.2, 0, 0, 1] },
-                                    opacity: { duration: 0.18, ease: 'easeOut' }
-                                  }}
+                                  transition={{ height: { duration: 0.28, ease: EASE_OUT }, opacity: { duration: 0.18 } }}
                                   style={{ overflow: 'hidden' }}
                                 >
-                                  <div
-                                    style={{
-                                      padding: '0 14px 14px',
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      gap: '10px'
-                                    }}
-                                  >
+                                  <div className="medical-card-body">
                                     <div
                                       style={{
-                                        paddingTop: '10px',
-                                        borderTop: '1px solid var(--md-sys-color-outline-variant)',
+                                        borderTop: '1px solid var(--line)',
+                                        paddingTop: 12,
                                         display: 'flex',
-                                        alignItems: 'center',
                                         flexWrap: 'wrap',
-                                        gap: '8px',
-                                        fontSize: '0.8rem',
-                                        color: 'var(--md-sys-color-on-surface-variant)'
+                                        gap: '6px 14px',
+                                        alignItems: 'center',
+                                        color: 'var(--ink-2)',
+                                        fontSize: '0.95rem'
                                       }}
                                     >
                                       <span className="ficha-badge">{item.nro_ficha}</span>
-                                      <span><strong>Edad:</strong> {item.edad} años</span>
-                                      <span>•</span>
-                                      <span><strong>O. Social:</strong> {Number(item.tiene_obra_social) === 1 ? item.obra_social_nombre : 'No'}</span>
+                                      <span>Obra social: {Number(item.tiene_obra_social) === 1 ? item.obra_social_nombre || 'Sí' : 'No'}</span>
                                     </div>
 
-                                    {/* Row 1: Direct Contact (Call & WhatsApp) */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                      <a
-                                        href={`tel:${cleanPhone}`}
-                                        className="md3-btn md3-btn-call"
-                                        style={{ height: '38px', padding: '0 12px', fontSize: '0.82rem', borderRadius: '12px', whiteSpace: 'nowrap' }}
-                                        title="Llamar por teléfono al padre/tutor"
-                                      >
-                                        <Phone size={15} /> Llamar
+                                    {patologias.length > 0 ? (
+                                      <div className="alert-chips">
+                                        {patologias.map((p) => (
+                                          <span key={p.label} className="alert-chip">
+                                            {p.label}
+                                            {p.detalle ? `: ${p.detalle}` : ''}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="clear-text">Sin condiciones de salud declaradas</span>
+                                    )}
+
+                                    <div style={{ fontSize: '0.95rem', color: 'var(--ink-2)' }}>
+                                      Tutor: <strong style={{ color: 'var(--ink)' }}>{item.padre_nombre}</strong>
+                                    </div>
+
+                                    <div className="contact-grid">
+                                      <a href={tel} className="md3-btn md3-btn-call">
+                                        <Phone size={18} /> Llamar
                                       </a>
-                                      <a
-                                        href={`https://wa.me/${waNum}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="md3-btn md3-btn-success"
-                                        style={{ height: '38px', padding: '0 12px', fontSize: '0.82rem', borderRadius: '12px', whiteSpace: 'nowrap' }}
-                                        title="Enviar WhatsApp al padre/tutor"
-                                      >
-                                        <MessageCircle size={15} /> WhatsApp
+                                      <a href={wa} target="_blank" rel="noreferrer" className="md3-btn md3-btn-success">
+                                        <MessageCircle size={18} /> WhatsApp
                                       </a>
                                     </div>
 
-                                    {/* Row 2: Medical Sheet & Admin Actions */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{ display: 'flex', gap: 8 }}>
                                       <button
                                         onClick={() => setFichaSeleccionada(item)}
                                         className="md3-btn md3-btn-filled"
-                                        style={{ flex: 1, height: '40px', padding: '0 14px', fontSize: '0.84rem', borderRadius: '12px', whiteSpace: 'nowrap' }}
+                                        style={{ flex: 1, borderRadius: 'var(--r-md)', minHeight: 48 }}
                                       >
-                                        <FileText size={16} /> Ver Ficha / PDF
+                                        <FileText size={18} /> Ver ficha completa
                                       </button>
                                       <button
                                         onClick={() => setEditModalFicha({ ...item })}
-                                        className="md3-btn md3-btn-tonal"
-                                        style={{ width: '40px', height: '40px', padding: 0, borderRadius: '12px', flexShrink: 0 }}
-                                        title="Editar datos clínicos / Firmar"
+                                        className="tool-btn"
+                                        style={{ width: 48, height: 48 }}
+                                        aria-label="Editar control de salud"
                                       >
-                                        <Edit3 size={16} />
+                                        <Edit3 size={18} />
                                       </button>
                                       <button
                                         onClick={() => handleEliminarFicha(item.id, item.nino_nombre)}
-                                        className="md3-btn md3-btn-danger"
-                                        style={{ width: '40px', height: '40px', padding: 0, borderRadius: '12px', flexShrink: 0 }}
-                                        title="Eliminar ficha"
+                                        className="tool-btn danger"
+                                        style={{ width: 48, height: 48 }}
+                                        aria-label="Eliminar ficha"
                                       >
-                                        <Trash2 size={16} />
+                                        <Trash2 size={18} />
                                       </button>
                                     </div>
                                   </div>
                                 </motion.div>
                               )}
                             </AnimatePresence>
-                          </div>
+                          </motion.div>
                         );
-                      }
-
-                      return (
-                        <motion.div
-                          key={item.id}
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-                          className={`medical-card ${patologias.length > 0 ? 'has-alert' : 'no-alert'}`}
-                        >
-                          {/* Card Body */}
-                          <div className="medical-card-body">
-                            {/* Header row: Nro ficha + Colonia */}
-                            <div
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                gap: '8px'
-                              }}
-                            >
-                              <span className="ficha-badge">{item.nro_ficha}</span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontSize: '0.74rem', color: 'var(--md-sys-color-on-surface-variant)', fontWeight: 600 }}>
-                                  📍 {item.colonia_nombre}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Child name & details */}
-                            <div>
-                              <h3
-                                className="font-display"
-                                style={{
-                                  fontSize: '1.12rem',
-                                  fontWeight: 800,
-                                  color: 'var(--md-sys-color-on-surface)'
-                                }}
-                              >
-                                {item.nino_nombre}
-                              </h3>
-                              <div style={{ fontSize: '0.82rem', color: 'var(--md-sys-color-on-surface-variant)', marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                                <span><strong>DNI:</strong> {item.nino_dni}</span>
-                                <span><strong>Edad:</strong> {item.edad} años</span>
-                                <span><strong>O. Social:</strong> {Number(item.tiene_obra_social) === 1 ? item.obra_social_nombre : 'No'}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Card Footer — Action buttons */}
-                          <div className="medical-card-footer">
-                            {/* Row 1: Direct Contact (Call & WhatsApp) */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                              <a
-                                href={`tel:${cleanPhone}`}
-                                className="md3-btn md3-btn-call"
-                                style={{ height: '38px', padding: '0 12px', fontSize: '0.82rem', borderRadius: '12px', whiteSpace: 'nowrap' }}
-                                title="Llamar por teléfono al padre/tutor"
-                              >
-                                <Phone size={15} /> Llamar
-                              </a>
-                              <a
-                                href={`https://wa.me/${waNum}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="md3-btn md3-btn-success"
-                                style={{ height: '38px', padding: '0 12px', fontSize: '0.82rem', borderRadius: '12px', whiteSpace: 'nowrap' }}
-                                title="Enviar WhatsApp al padre/tutor"
-                              >
-                                <MessageCircle size={15} /> WhatsApp
-                              </a>
-                            </div>
-
-                            {/* Row 2: Medical Sheet & Admin Actions */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      })}
+                    </div>
+                  ) : (
+                    /* ----- PC: tabla con columnas fijas ----- */
+                    <div className="fichas-table" role="table" aria-label="Fichas médicas">
+                      <div className="fichas-row head" role="row">
+                        <span role="columnheader" aria-label="Estado de salud" />
+                        <span role="columnheader">Niño / niña</span>
+                        <span role="columnheader" className="col-nro">Nº de ficha</span>
+                        <span role="columnheader">Localidad</span>
+                        <span role="columnheader">Salud</span>
+                        <span role="columnheader" style={{ textAlign: 'right' }}>
+                          Acciones
+                        </span>
+                      </div>
+                      {fichasFiltradas.map((item, idx) => {
+                        const patologias = getPatologiasDeFicha(item);
+                        const { tel, wa } = contactos(item);
+                        return (
+                          <motion.div
+                            key={item.id}
+                            className="fichas-row"
+                            role="row"
+                            initial={reduceMotion ? false : { opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.22, delay: Math.min(idx, 12) * 0.02 }}
+                          >
+                            <span role="cell">
+                              <span
+                                className={`health-mark ${patologias.length ? 'alert' : 'clear'}`}
+                                title={patologias.length ? 'Tiene condiciones de salud' : 'Sin condiciones de salud'}
+                              />
+                            </span>
+                            <span role="cell" style={{ minWidth: 0 }}>
                               <button
                                 onClick={() => setFichaSeleccionada(item)}
-                                className="md3-btn md3-btn-filled"
-                                style={{ flex: 1, height: '40px', padding: '0 14px', fontSize: '0.84rem', borderRadius: '12px', whiteSpace: 'nowrap' }}
+                                className="fichas-name"
+                                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', maxWidth: '100%', display: 'block' }}
                               >
-                                <FileText size={16} /> Ver Ficha / PDF
+                                {item.nino_nombre}
+                              </button>
+                              <span className="fichas-sub" style={{ display: 'block' }}>
+                                DNI {item.nino_dni} · {item.edad} años
+                              </span>
+                              <span className="fichas-sub" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                Tutor: {item.padre_nombre}
+                              </span>
+                            </span>
+                            <span role="cell" className="col-nro">
+                              <span className="ficha-badge">{item.nro_ficha}</span>
+                            </span>
+                            <span role="cell" className="lane-tag">
+                              <span className="lane-swatch" style={{ background: laneColor(item.colonia_id) }} />
+                              <span>{item.colonia_nombre}</span>
+                            </span>
+                            <span role="cell">
+                              {patologias.length > 0 ? (
+                                <span className="alert-chips">
+                                  {patologias.slice(0, 3).map((p) => (
+                                    <span key={p.label} className="alert-chip" title={p.detalle || p.label}>
+                                      {p.label}
+                                    </span>
+                                  ))}
+                                  {patologias.length > 3 && <span className="alert-chip">+{patologias.length - 3}</span>}
+                                </span>
+                              ) : (
+                                <span className="clear-text">Sin condiciones</span>
+                              )}
+                            </span>
+                            <span role="cell" className="fichas-actions">
+                              <a href={tel} className="tool-btn call" title={`Llamar a ${item.padre_nombre}`} aria-label={`Llamar a ${item.padre_nombre}`}>
+                                <Phone size={18} />
+                              </a>
+                              <a
+                                href={wa}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="tool-btn wa"
+                                title={`WhatsApp a ${item.padre_nombre}`}
+                                aria-label={`WhatsApp a ${item.padre_nombre}`}
+                              >
+                                <MessageCircle size={18} />
+                              </a>
+                              <button
+                                onClick={() => setFichaSeleccionada(item)}
+                                className="tool-btn"
+                                title="Ver ficha completa"
+                                aria-label="Ver ficha completa"
+                              >
+                                <FileText size={18} />
                               </button>
                               <button
                                 onClick={() => setEditModalFicha({ ...item })}
-                                className="md3-btn md3-btn-tonal"
-                                style={{ width: '40px', height: '40px', padding: 0, borderRadius: '12px', flexShrink: 0 }}
-                                title="Editar datos clínicos / Firmar"
+                                className="tool-btn"
+                                title="Editar control de salud"
+                                aria-label="Editar control de salud"
                               >
-                                <Edit3 size={16} />
+                                <Edit3 size={18} />
                               </button>
                               <button
                                 onClick={() => handleEliminarFicha(item.id, item.nino_nombre)}
-                                className="md3-btn md3-btn-danger"
-                                style={{ width: '40px', height: '40px', padding: 0, borderRadius: '12px', flexShrink: 0 }}
+                                className="tool-btn danger"
                                 title="Eliminar ficha"
+                                aria-label="Eliminar ficha"
                               >
-                                <Trash2 size={16} />
+                                <Trash2 size={18} />
                               </button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                )}
-              </motion.div>
-            )}
+                            </span>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </motion.div>
+              )}
 
-            {/* ==================== TAB 2: ESTADÍSTICAS ==================== */}
-            {activeTab === 'dashboard' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                {loading ? (
-                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--md-sys-color-on-surface-variant)' }}>
-                    Calculando estadísticas e indicadores...
-                  </div>
-                ) : (
-                  <EstadisticasPanel
-                    inscripciones={inscripciones}
+              {/* ==================== ESTADÍSTICAS ==================== */}
+              {activeTab === 'dashboard' && (
+                <motion.div key="dashboard" {...tabMotion}>
+                  {loading && inscripciones.length === 0 ? (
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      <div className="skeleton" style={{ height: 120 }} />
+                      <div className="skeleton" style={{ height: 260 }} />
+                    </div>
+                  ) : (
+                    <EstadisticasPanel
+                      inscripciones={inscripciones}
+                      colonias={colonias}
+                      isMobileView={isMobileView}
+                      localidad={statsColonia}
+                      onLocalidadChange={setStatsColonia}
+                      laneColor={laneColor}
+                      onSelectFicha={(ficha) => {
+                        const scActual = document.querySelector('.app-main-scroll');
+                        scrollAlVolver.current = scActual && scActual.scrollTop > 0 ? scActual.scrollTop : window.scrollY;
+                        setFichaSeleccionada(ficha);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        const sc = document.querySelector('.app-main-scroll');
+                        if (sc) sc.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                    />
+                  )}
+                </motion.div>
+              )}
+
+              {/* ==================== AVISOS POR CLIMA ==================== */}
+              {activeTab === 'clima' && (
+                <motion.div key="clima" {...tabMotion}>
+                  <AvisosClimaPanel
                     colonias={colonias}
-                    isMobileView={isMobileView}
-                    onSelectFicha={(ficha) => {
-                      setFichaSeleccionada(ficha);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                      const scrollContainer = document.querySelector('.app-main-scroll');
-                      if (scrollContainer) scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+                    alertas={alertas}
+                    authFetch={authFetch}
+                    onCambio={() => {
+                      cargarTodo();
+                      setRefreshBanner((p) => p + 1);
                     }}
+                    onUnauthorized={() => navigate('/login')}
                   />
-                )}
-              </motion.div>
-            )}
+                </motion.div>
+              )}
 
-            {/* ==================== TAB 3: DIFUSIÓN DE SUSPENSIONES POR CLIMA (EMAIL + WHATSAPP) ==================== */}
-            {activeTab === 'clima' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
-                  {/* Broadcast Form */}
-                  <div className="gf-card">
-                    <div className="gf-card-section-bar" style={{ background: '#fff3cd', color: '#78350f' }}>
-                      <CloudLightning size={16} /> Emitir Alerta por Clima o Fuerza Mayor
-                    </div>
-                    <h3 className="font-display" style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '6px' }}>
-                      Difusión Oficial a Padres y Tutores
-                    </h3>
-                    <p style={{ fontSize: '0.86rem', color: '#475569', marginBottom: '16px' }}>
-                      Publicá un aviso inmediato en la web/app, enviá un correo automático a todos los padres inscriptos y obtené la lista de envío directo por WhatsApp (`wa.me`).
-                    </p>
-
-                    <form onSubmit={handleEnviarDifusion}>
-                      <div className="md3-field">
-                        <label className="md3-label">Colonia / Localidad afectada</label>
-                        <select
-                          className="md3-select"
-                          value={alertaForm.colonia_id}
-                          onChange={(e) => setAlertaForm({ ...alertaForm, colonia_id: e.target.value })}
-                        >
-                          <option value="">🌩️ TODAS LAS LOCALIDADES MUNICIPALES</option>
-                          {colonias.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.nombre} ({c.sede})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="md3-field">
-                        <label className="md3-label">Título del Comunicado</label>
-                        <input
-                          type="text"
-                          className="md3-input"
-                          value={alertaForm.titulo}
-                          onChange={(e) => setAlertaForm({ ...alertaForm, titulo: e.target.value })}
-                          required
-                        />
-                      </div>
-
-                      <div className="md3-field">
-                        <label className="md3-label">Mensaje detallado para los Padres</label>
-                        <textarea
-                          rows="4"
-                          className="md3-textarea"
-                          value={alertaForm.mensaje}
-                          onChange={(e) => setAlertaForm({ ...alertaForm, mensaje: e.target.value })}
-                          required
-                        />
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', fontSize: '0.88rem' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={alertaForm.suspender_colonia}
-                            onChange={(e) => setAlertaForm({ ...alertaForm, suspender_colonia: e.target.checked })}
-                            style={{ transform: 'scale(1.2)', accentColor: '#006494' }}
-                          />
-                          <span>Marcar localidad(es) como <strong>Suspendida por hoy</strong> en el banner público</span>
-                        </label>
-
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={alertaForm.enviar_email}
-                            onChange={(e) => setAlertaForm({ ...alertaForm, enviar_email: e.target.checked })}
-                            style={{ transform: 'scale(1.2)', accentColor: '#006494' }}
-                          />
-                          <span>Enviar <strong>Email automático</strong> a todos los padres inscriptos</span>
-                        </label>
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="md3-btn md3-btn-filled"
-                        style={{ width: '100%', background: '#b45309' }}
-                        disabled={enviandoDifusion}
-                      >
-                        <Send size={18} />
-                        {enviandoDifusion
-                          ? 'Enviando Emails y Generando WhatsApp...'
-                          : 'Publicar Alerta + Enviar Emails + Generar WhatsApp'}
-                      </button>
-                    </form>
-                  </div>
-
-                  {/* WhatsApp & Email Results + History */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {errorOperacion && (
-                      <div role="alert" style={{ padding: '12px 16px', borderRadius: '10px',
-                        background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#b91c1c',
-                        fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        ⚠️ {errorOperacion}
-                        <button onClick={() => setErrorOperacion(null)}
-                          style={{ marginLeft: 'auto', background: 'none', border: 'none',
-                            cursor: 'pointer', color: '#b91c1c', fontWeight: 700 }}>✕</button>
-                      </div>
-                    )}
-                    {difusionResultado && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.96 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="gf-card"
-                        style={{ border: '2px solid #128c7e' }}
-                      >
-                        <h3 className="font-display" style={{ fontSize: '1.15rem', color: '#0f172a' }}>
-                          ✅ ¡Comunicado Emitido! ({difusionResultado.whatsappLinks?.length || 0} familias alcanzadas)
-                        </h3>
-                        {difusionResultado.emailResult?.modo === 'sin_configurar' && (
-                          <p role="alert" style={{ fontSize: '0.85rem', color: '#92400e',
-                            background: '#fef3c7', border: '1px solid #fcd34d',
-                            borderRadius: '8px', padding: '8px 12px', marginTop: '8px' }}>
-                            ⚠️ <strong>Los correos NO se enviaron:</strong> SMTP no configurado. Para activar el envío de correos, configurá las variables <code>SMTP_HOST</code>, <code>SMTP_USER</code> y <code>SMTP_PASS</code> en Railway.
-                          </p>
-                        )}
-                        <p style={{ fontSize: '0.85rem', color: '#475569', marginTop: '4px' }}>
-                          <Mail size={14} style={{ verticalAlign: 'middle' }} /> Correos procesados:{' '}
-                          <strong>{difusionResultado.emailResult?.enviados || 0}</strong>.
-                          {difusionResultado.emailResult?.previewUrl && (
-                            <>
-                              {' '}
-                              <a
-                                href={difusionResultado.emailResult.previewUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{ color: '#006494', fontWeight: 700 }}
-                              >
-                                Ver vista previa del Email enviado ↗
-                              </a>
-                            </>
-                          )}
-                        </p>
-
-                        <div style={{ marginTop: '12px' }}>
-                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#128c7e', marginBottom: '8px' }}>
-                            📲 Envío rápido de WhatsApp a cada Padre/Tutor (Sin Meta API):
-                          </div>
-                          <div style={{ maxHeight: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {difusionResultado.whatsappLinks?.map((item, idx) => (
-                              <div
-                                key={idx}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  padding: '8px 12px',
-                                  background: '#f8fafc',
-                                  borderRadius: '10px',
-                                  border: '1px solid #cbd5e1',
-                                  fontSize: '0.82rem'
-                                }}
-                              >
-                                <div>
-                                  <strong>{item.padre_nombre}</strong> (Tutor de {item.nino_nombre})
-                                  <div style={{ color: '#64748b', fontSize: '0.76rem' }}>Tel: {item.telefono}</div>
-                                </div>
-                                <a
-                                  href={item.wa_link}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="md3-btn md3-btn-success"
-                                  style={{ padding: '6px 12px', fontSize: '0.78rem' }}
-                                >
-                                  <MessageCircle size={14} /> Enviar WhatsApp
-                                </a>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    <div className="gf-card">
-                      <h3 className="font-display" style={{ fontSize: '1.1rem', marginBottom: '12px' }}>
-                        Historial de Alertas y Suspensiones
-                      </h3>
-                      {alertas.length === 0 ? (
-                        <p style={{ fontSize: '0.86rem', color: '#64748b' }}>
-                          No hay alertas climáticas emitidas recientemente.
-                        </p>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          {alertas.map((al) => (
-                            <div
-                              key={al.id}
-                              style={{
-                                padding: '12px',
-                                borderRadius: '12px',
-                                background: al.activa ? '#fffbeb' : '#f8fafc',
-                                border: al.activa ? '1px solid #f59e0b' : '1px solid #e2e8f0'
-                              }}
-                            >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                                <strong style={{ fontSize: '0.92rem' }}>{al.titulo}</strong>
-                                <span
-                                  style={{
-                                    fontSize: '0.72rem',
-                                    fontWeight: 700,
-                                    padding: '2px 8px',
-                                    borderRadius: '999px',
-                                    background: al.activa ? '#f59e0b' : '#cbd5e1',
-                                    color: al.activa ? '#fff' : '#334155'
-                                  }}
-                                >
-                                  {al.activa ? 'ACTIVA EN WEB' : 'FINALIZADA'}
-                                </span>
-                              </div>
-                              <p style={{ fontSize: '0.82rem', color: '#475569', marginTop: '4px' }}>
-                                {al.mensaje}
-                              </p>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', fontSize: '0.76rem', color: '#64748b' }}>
-                                <span>Localidad: {al.colonia_nombre || 'Todas'} • {al.created_at}</span>
-                                {al.activa === 1 && (
-                                  <button
-                                    onClick={() => handleDesactivarAlerta(al.id)}
-                                    className="md3-btn md3-btn-outlined"
-                                    style={{ padding: '4px 10px', fontSize: '0.74rem' }}
-                                  >
-                                    Levantar Suspensión
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* ==================== TAB 4: BANCO DE IMÁGENES ==================== */}
-            {activeTab === 'galeria' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <GaleriaPanel colonias={colonias} isMobileView={isMobileView} />
-              </motion.div>
-            )}
-          </>
-        )}
-      </main>
-
-      {/* Status Bar */}
-      <footer className="app-status-bar no-print">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '999px', background: '#22C55E', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-          <span>Sistema activo</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span>Colonias de Verano • Municipalidad de Valle Viejo</span>
-        </div>
-      </footer>
+              {/* ==================== BANCO DE IMÁGENES ==================== */}
+              {activeTab === 'galeria' && (
+                <motion.div key="galeria" {...tabMotion}>
+                  <GaleriaPanel colonias={colonias} isMobileView={isMobileView} />
+                </motion.div>
+              )}
+            </>
+          )}
+        </main>
       </div>
 
-      {/* ==================== MOBILE FLOATING ACTION BUTTON (Cargar Nueva Ficha) ==================== */}
-      {isMobileView && activeTab === 'fichas' && !fichaSeleccionada && (
-        <Link
-          to="/inscripcion"
-          className="mobile-fab no-print"
-          aria-label="Cargar Nueva Ficha"
-        >
-          <Plus size={20} strokeWidth={2.5} />
-          <span>Cargar Nueva Ficha</span>
-        </Link>
-      )}
+      {/* ==================== BOTÓN FLOTANTE (celular) ==================== */}
+      <AnimatePresence>
+        {isMobileView && activeTab === 'fichas' && !fichaSeleccionada && expandedMobileCardId === null && (
+          <MotionLink
+            key="fab"
+            to="/inscripcion"
+            className="mobile-fab no-print"
+            aria-label="Cargar nueva ficha"
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.9, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            whileTap={{ scale: 0.96 }}
+            transition={{ duration: 0.22, ease: EASE_OUT }}
+          >
+            <Plus size={22} strokeWidth={2.5} />
+            <span>Nueva ficha</span>
+          </MotionLink>
+        )}
+      </AnimatePresence>
 
-      {/* ==================== MOBILE BOTTOM NAVIGATION BAR (PWA App Feel) ==================== */}
-      <nav className="app-bottom-nav no-print">
+      {/* ==================== NAVEGACIÓN INFERIOR (celular) ==================== */}
+      <nav className="app-bottom-nav no-print" aria-label="Secciones del panel">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = activeTab === item.id;
           return (
             <button
               key={item.id}
-              onClick={() => {
-                setFichaSeleccionada(null);
-                setActiveTab(item.id);
-              }}
+              onClick={() => cambiarTab(item.id)}
               className={`bottom-nav-item ${active ? 'active' : ''}`}
+              aria-current={active ? 'page' : undefined}
             >
-              <div className="bottom-nav-pill">
-                <Icon size={20} />
-              </div>
-              <span>{item.shortLabel || item.label.split(' ')[0]}</span>
+              <span className="bottom-nav-pill">
+                {active && (
+                  <motion.span
+                    layoutId="bottom-pill"
+                    className="pill-bg"
+                    transition={reduceMotion ? { duration: 0 } : { type: 'spring', duration: 0.38, bounce: 0.15 }}
+                  />
+                )}
+                <Icon size={22} />
+              </span>
+              <span>{item.shortLabel}</span>
             </button>
           );
         })}
       </nav>
 
-      {/* ==================== MODAL: EDITAR DATOS CLÍNICOS / FIRMA PROFESIONAL ==================== */}
-      {editModalFicha && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15,23,42,0.55)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-            zIndex: 100
-          }}
-          onClick={() => setEditModalFicha(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.94 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="gf-card"
-            style={{ maxWidth: '560px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-display" style={{ fontSize: '1.2rem', marginBottom: '4px' }}>
-              Actualizar Control de Salud: {editModalFicha.nino_nombre}
-            </h3>
-            <p style={{ fontSize: '0.84rem', color: '#64748b', marginBottom: '14px' }}>
-              Ficha Nº {editModalFicha.nro_ficha} • DNI {editModalFicha.nino_dni}
+      {/* ==================== EDITAR CONTROL DE SALUD ==================== */}
+      <Hoja open={Boolean(editModalFicha)} onClose={() => setEditModalFicha(null)} isMobile={isMobileView} maxWidth={560}>
+        {editModalFicha && (
+          <>
+            <h3 style={{ fontSize: '1.3rem' }}>Control de salud</h3>
+            <p style={{ color: 'var(--ink-2)', margin: '4px 0 16px' }}>
+              {editModalFicha.nino_nombre} · Ficha {editModalFicha.nro_ficha}
             </p>
             <form onSubmit={handleGuardarEdicionFicha}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-                <div className="md3-field">
-                  <label className="md3-label">Peso (kg)</label>
-                  <input
-                    type="text"
-                    className="md3-input"
-                    value={editModalFicha.peso || ''}
-                    onChange={(e) => setEditModalFicha({ ...editModalFicha, peso: e.target.value })}
-                  />
-                </div>
-                <div className="md3-field">
-                  <label className="md3-label">Talla (cm)</label>
-                  <input
-                    type="text"
-                    className="md3-input"
-                    value={editModalFicha.talla || ''}
-                    onChange={(e) => setEditModalFicha({ ...editModalFicha, talla: e.target.value })}
-                  />
-                </div>
-                <div className="md3-field">
-                  <label className="md3-label">Presión Alta</label>
-                  <input
-                    type="text"
-                    className="md3-input"
-                    value={editModalFicha.presion_alta || ''}
-                    onChange={(e) => setEditModalFicha({ ...editModalFicha, presion_alta: e.target.value })}
-                  />
-                </div>
-                <div className="md3-field">
-                  <label className="md3-label">Presión Baja</label>
-                  <input
-                    type="text"
-                    className="md3-input"
-                    value={editModalFicha.presion_baja || ''}
-                    onChange={(e) => setEditModalFicha({ ...editModalFicha, presion_baja: e.target.value })}
-                  />
-                </div>
+                {[
+                  ['peso', 'Peso (kg)'],
+                  ['talla', 'Altura (cm)'],
+                  ['presion_alta', 'Presión alta'],
+                  ['presion_baja', 'Presión baja']
+                ].map(([k, label]) => (
+                  <div className="md3-field" key={k}>
+                    <label className="md3-label" htmlFor={`ed-${k}`}>
+                      {label}
+                    </label>
+                    <input
+                      id={`ed-${k}`}
+                      type="text"
+                      inputMode="decimal"
+                      className="md3-input"
+                      value={editModalFicha[k] || ''}
+                      onChange={(e) => setEditModalFicha({ ...editModalFicha, [k]: e.target.value })}
+                    />
+                  </div>
+                ))}
               </div>
 
               <div className="md3-field">
-                <label className="md3-label">Observaciones Médicas / Indicaciones de Urgencia</label>
+                <label className="md3-label" htmlFor="ed-obs">
+                  Observaciones e indicaciones de urgencia
+                </label>
                 <textarea
-                  rows="3"
+                  id="ed-obs"
+                  rows={3}
                   className="md3-textarea"
                   value={editModalFicha.observaciones || ''}
                   onChange={(e) => setEditModalFicha({ ...editModalFicha, observaciones: e.target.value })}
@@ -1295,77 +927,73 @@ export default function AdminDashboardPage() {
               </div>
 
               <div className="md3-field">
-                <label className="md3-label">Firma y Sello del Profesional de la Salud</label>
+                <label className="md3-label" htmlFor="ed-firma">
+                  Firma y sello del profesional
+                </label>
                 <input
+                  id="ed-firma"
                   type="text"
                   className="md3-input"
-                  placeholder="Ej: Dr. Roberto Juárez - MP 1842"
+                  placeholder="Ejemplo: Dr. Roberto Juárez · MP 1842"
                   value={editModalFicha.firma_profesional_texto || ''}
-                  onChange={(e) =>
-                    setEditModalFicha({ ...editModalFicha, firma_profesional_texto: e.target.value })
-                  }
+                  onChange={(e) => setEditModalFicha({ ...editModalFicha, firma_profesional_texto: e.target.value })}
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
                 <button type="button" className="md3-btn md3-btn-outlined" onClick={() => setEditModalFicha(null)}>
                   Cancelar
                 </button>
                 <button type="submit" className="md3-btn md3-btn-filled">
-                  Guardar Cambios
+                  Guardar cambios
                 </button>
               </div>
             </form>
-          </motion.div>
-        </div>
-      )}
+          </>
+        )}
+      </Hoja>
+    </div>
+  );
+}
 
-      {/* ==================== MODAL: GUÍA INSTALACIÓN PWA ANDROID & iOS ==================== */}
-      {showPwaGuide && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15,23,42,0.55)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-            zIndex: 100
-          }}
-          onClick={() => setShowPwaGuide(false)}
+/** Modal en PC, hoja inferior en celular. Cierra con Escape o tocando afuera. */
+function Hoja({ open, onClose, isMobile, maxWidth = 520, children }) {
+  const reduceMotion = useReducedMotion();
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  const panel = isMobile
+    ? { initial: { y: '100%' }, animate: { y: 0 }, exit: { y: '100%' }, transition: { duration: reduceMotion ? 0 : 0.4, ease: [0.32, 0.72, 0, 1] } }
+    : { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.97 }, transition: { duration: reduceMotion ? 0 : 0.2, ease: [0.23, 1, 0.32, 1] } };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="sheet-backdrop"
+          onClick={onClose}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.94 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="gf-card"
-            style={{ maxWidth: '460px', width: '100%' }}
+            className="sheet-panel"
+            role="dialog"
+            aria-modal="true"
+            style={{ maxWidth }}
             onClick={(e) => e.stopPropagation()}
+            {...panel}
           >
-            <h3 className="font-display" style={{ fontSize: '1.25rem', marginBottom: '10px' }}>
-              📱 Instalar App "Colonias de Verano"
-            </h3>
-            <p style={{ fontSize: '0.88rem', color: '#475569', marginBottom: '14px' }}>
-              Esta plataforma es una <strong>PWA (Progressive Web App)</strong> oficial. Podés instalarla en tu celular Android o iPhone sin pasar por la tienda de aplicaciones:
-            </p>
-            <div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '12px', marginBottom: '10px', fontSize: '0.85rem' }}>
-              <strong>🤖 En Android (Chrome):</strong>
-              <p style={{ marginTop: '4px' }}>
-                Tocá el menú de 3 puntos <strong>(⋮)</strong> arriba a la derecha y elegí <strong>"Instalar aplicación"</strong> o <strong>"Agregar a la pantalla principal"</strong>.
-              </p>
-            </div>
-            <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', marginBottom: '16px', fontSize: '0.85rem', border: '1px solid #e2e8f0' }}>
-              <strong>🍏 En iPhone / iPad (Safari):</strong>
-              <p style={{ marginTop: '4px' }}>
-                Tocá el botón <strong>Compartir (⬆️)</strong> en la barra inferior de Safari y seleccioná <strong>"Agregar a inicio"</strong>.
-              </p>
-            </div>
-            <button className="md3-btn md3-btn-filled" style={{ width: '100%' }} onClick={() => setShowPwaGuide(false)}>
-              ¡Entendido!
-            </button>
+            <div className="sheet-handle" />
+            {children}
           </motion.div>
-        </div>
+        </motion.div>
       )}
-    </div>
+    </AnimatePresence>
   );
 }

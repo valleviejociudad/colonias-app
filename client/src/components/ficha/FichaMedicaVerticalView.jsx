@@ -460,7 +460,7 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
       }}
     >
       <span>
-        <strong>Colonia / Localidad:</strong> {ficha.colonia_nombre || 'Colonia Municipal Valle Viejo'} ({ficha.colonia_sede || 'Valle Viejo'})
+        <strong>Colonia / Localidad:</strong> {ficha.colonia_nombre || 'Colonia Municipal Valle Viejo'}
       </span>
       <span>
         <strong>Turno:</strong> {ficha.colonia_turno || 'Mañana'}
