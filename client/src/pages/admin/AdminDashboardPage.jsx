@@ -234,13 +234,21 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const puedeVerBackups = user?.rol === 'admin' && !isMobileView;
+
   const navItems = [
     { id: 'fichas', label: 'Fichas médicas', shortLabel: 'Fichas', icon: HeartPulse },
     { id: 'dashboard', label: 'Estadísticas', shortLabel: 'Estadísticas', icon: BarChart3 },
     { id: 'clima', label: 'Avisos por clima', shortLabel: 'Avisos', icon: CloudLightning },
     { id: 'galeria', label: 'Banco de imágenes', shortLabel: 'Imágenes', icon: Images },
-    { id: 'backups', label: 'Backups', shortLabel: 'Backups', icon: DatabaseBackup }
+    // Backups: solo admin y solo en PC (en el celular no se ofrece)
+    ...(puedeVerBackups ? [{ id: 'backups', label: 'Backups', shortLabel: 'Backups', icon: DatabaseBackup }] : [])
   ];
+
+  // Si se achica la ventana a tamaño celular estando en Backups, volver a Fichas
+  useEffect(() => {
+    if (activeTab === 'backups' && !puedeVerBackups) setActiveTab('fichas');
+  }, [activeTab, puedeVerBackups]);
 
   const cambiarTab = (id) => {
     setFichaSeleccionada(null);
@@ -827,7 +835,7 @@ export default function AdminDashboardPage() {
               )}
 
               {/* ==================== BACKUPS ==================== */}
-              {activeTab === 'backups' && (
+              {activeTab === 'backups' && puedeVerBackups && (
                 <motion.div key="backups" {...tabMotion}>
                   {loading && inscripciones.length === 0 ? (
                     <div className="skeleton" style={{ height: 220 }} />

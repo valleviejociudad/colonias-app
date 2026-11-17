@@ -16,6 +16,14 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+// Solo el rol admin (Backups e impresión masiva)
+function AdminRoute({ children }) {
+  const { user, token } = useAuth();
+  if (!user || !token) return <Navigate to="/login" replace />;
+  if (user.rol !== 'admin') return <Navigate to="/admin" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -28,9 +36,9 @@ export default function App() {
           <Route
             path="/admin/imprimir"
             element={
-              <ProtectedRoute>
+              <AdminRoute>
                 <ImprimirFichasPage />
-              </ProtectedRoute>
+              </AdminRoute>
             }
           />
           <Route
