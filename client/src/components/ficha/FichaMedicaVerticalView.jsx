@@ -21,7 +21,8 @@ const PATOLOGIAS_LIST = [
   { key: 'otras', label: 'Otras:' }
 ];
 
-export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton = true, hideAdminToolbar = false }) {
+// soloPlanilla: muestra únicamente la hoja (sin barras ni botones), para la impresión masiva.
+export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton = true, hideAdminToolbar = false, soloPlanilla = false }) {
   const sheetRef = useRef(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
@@ -476,14 +477,14 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
     <div>
       {/* Regla @page dinámica para que también al imprimir directo desde el navegador
           salga A4 Vertical sin márgenes grandes SOLO en mobile, y A4 Horizontal en desktop */}
-      <style>
+      {!soloPlanilla && <style>
         {isMobile
           ? '@page { size: A4 portrait; margin: 4mm; }'
           : '@page { size: A4 landscape; margin: 6mm; }'}
-      </style>
+      </style>}
 
       {/* Toolbar de acciones (sólo en vista admin) */}
-      {!hideAdminToolbar && (
+      {!hideAdminToolbar && !soloPlanilla && (
         <div
           className="no-print"
           style={{
@@ -702,7 +703,7 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
       )}
 
       {/* Botón de descarga inferior (sólo en vista pública sin toolbar superior) */}
-      {hideAdminToolbar && (
+      {hideAdminToolbar && !soloPlanilla && (
         <div
           className="no-print"
           style={{

@@ -5,6 +5,7 @@ import FormularioInscripcionPage from './pages/public/FormularioInscripcionPage'
 import VerFichaPublicaPage from './pages/public/VerFichaPublicaPage';
 import LoginPage from './pages/auth/LoginPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import ImprimirFichasPage from './pages/admin/ImprimirFichasPage';
 import { BASE_PATH } from './config';
 
 function ProtectedRoute({ children }) {
@@ -24,6 +25,14 @@ export default function App() {
           <Route path="/inscripcion" element={<FormularioInscripcionPage />} />
           <Route path="/ficha/:token" element={<VerFichaPublicaPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/admin/imprimir"
+            element={
+              <ProtectedRoute>
+                <ImprimirFichasPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/admin/*"
             element={

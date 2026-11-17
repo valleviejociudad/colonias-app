@@ -108,6 +108,26 @@ async function enviarEmailSuspension({ destinatarios, titulo, mensaje, coloniaNo
   };
 }
 
+// Manda la copia de la base de datos como adjunto. Solo con SMTP real (nunca a Ethereal).
+async function enviarEmailBackup({ destino, archivo, nombre, totalFichas }) {
+  if (!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)) {
+    return { ok: false };
+  }
+  const transporter = await getTransporter();
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM || '"Colonias de Verano - Municipalidad de Valle Viejo" <deportes@valleviejo.gob.ar>',
+    to: destino,
+    subject: `Backup diario Colonias de Verano · ${totalFichas} fichas`,
+    text:
+      `Copia automática de la base de datos de Colonias de Verano (${totalFichas} fichas).\n\n` +
+      'Guardá el archivo adjunto en un lugar seguro: contiene datos de salud de menores.\n' +
+      'Para restaurarlo, se sube al Volume de Railway con el nombre colonias.sqlite.',
+    attachments: [{ filename: nombre, content: archivo }]
+  });
+  return { ok: true };
+}
+
 module.exports = {
-  enviarEmailSuspension
+  enviarEmailSuspension,
+  enviarEmailBackup
 };

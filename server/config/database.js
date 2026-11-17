@@ -580,7 +580,14 @@ function seedSampleInscripciones() {
   }
 }
 
+// Copia completa de la base en memoria (mismo formato que el archivo .sqlite)
+function exportDatabase() {
+  if (!dbInstance) throw new Error('Base de datos no inicializada');
+  return Buffer.from(dbInstance.export());
+}
+
 module.exports = {
   initDatabase,
+  exportDatabase,
   getDb: () => ({ queryAll, queryOne, runQuery, runQueryAndSave, saveDatabase, transaction })
 };

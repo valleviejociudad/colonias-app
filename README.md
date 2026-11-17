@@ -90,6 +90,18 @@ DB_PATH=/data/colonias.sqlite
 
 > ⚠️ **Sin el Volume + DB_PATH, la base de datos se borra en cada nuevo deploy.** Es obligatorio para no perder inscripciones.
 
+**Copias de las fichas.** En *Fichas médicas* hay una barra *Copias de las fichas* que respeta la localidad elegida:
+- **Excel:** descarga un `.csv` (se abre con Excel) con una fila por niño/a y todos los datos.
+- **Imprimir / PDF:** abre todas las fichas de la localidad, una por hoja, para imprimir o guardar como PDF.
+- **Backup completo** (solo admin): descarga el archivo `.sqlite` entero. Para restaurarlo, se sube al Volume como `/data/colonias.sqlite`.
+
+Backup automático por mail (optativo, requiere SMTP):
+
+```env
+BACKUP_EMAIL=deportes@valleviejo.gob.ar
+BACKUP_HORA=3
+```
+
 6. Optativo — para habilitar el Banco de Imágenes (Cloudinary):
 
 ```env

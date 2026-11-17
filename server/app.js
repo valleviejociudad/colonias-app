@@ -7,8 +7,8 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const { initDatabase, getDb } = require('./config/database');
-const { enviarEmailSuspension } = require('./services/emailService');
+const { initDatabase, getDb, exportDatabase } = require('./config/database');
+const { enviarEmailSuspension, enviarEmailBackup } = require('./services/emailService');
 const cloudinaryService = require('./services/cloudinaryService');
 
 const app = express();
@@ -1507,6 +1507,62 @@ app.delete('/api/galeria/:id', authMiddleware, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ==================== BACKUP ====================
+
+const TZ_AR = 'America/Argentina/Catamarca';
+
+// "2026-11-17 14:05:09" en hora de Argentina
+function ahoraArgentina() {
+  return new Date().toLocaleString('sv-SE', { timeZone: TZ_AR, hour12: false });
+}
+
+function nombreBackup() {
+  return `colonias_backup_${ahoraArgentina().replace(' ', '_').replace(/:/g, '-')}.sqlite`;
+}
+
+// Descarga la base completa (.sqlite). Con este archivo se restaura todo: fichas, colonias, usuarios, avisos.
+app.get('/api/backup', authMiddleware, requireRole('admin'), (req, res) => {
+  try {
+    const buffer = exportDatabase();
+    res.set({
+      'Content-Type': 'application/vnd.sqlite3',
+      'Content-Disposition': `attachment; filename="${nombreBackup()}"`,
+      'Content-Length': buffer.length
+    });
+    res.send(buffer);
+  } catch (err) {
+    console.error('No se pudo generar el backup:', err.message);
+    res.status(500).json({ error: 'No se pudo generar el backup' });
+  }
+});
+
+// Backup automático por mail: solo si BACKUP_EMAIL está configurado (y SMTP también).
+// Se manda una vez al día a la hora BACKUP_HORA (0-23, hora de Argentina; por defecto 3).
+function programarBackupDiario() {
+  const destino = String(process.env.BACKUP_EMAIL || '').trim();
+  if (!destino) return;
+  const horaCfg = Number(process.env.BACKUP_HORA ?? 3);
+  const hora = Number.isInteger(horaCfg) && horaCfg >= 0 && horaCfg <= 23 ? horaCfg : 3;
+  let ultimoDia = null;
+
+  const revisar = async () => {
+    const [dia, hhmmss] = ahoraArgentina().split(' ');
+    if (Number(hhmmss.slice(0, 2)) !== hora || ultimoDia === dia) return;
+    ultimoDia = dia;
+    try {
+      const { queryOne } = getDb();
+      const total = queryOne('SELECT COUNT(*) as n FROM inscripciones')?.n || 0;
+      const r = await enviarEmailBackup({ destino, archivo: exportDatabase(), nombre: nombreBackup(), totalFichas: total });
+      console.log(r.ok ? '💾 Backup diario enviado por mail' : '⚠️  Backup diario no enviado: SMTP sin configurar');
+    } catch (err) {
+      console.error('No se pudo mandar el backup diario:', err.message);
+    }
+  };
+
+  setInterval(revisar, 10 * 60 * 1000).unref();
+  console.log(`💾 Backup diario por mail activado (${hora}:00 hs)`);
+}
+
 // Serve frontend in production (for Railway deployment)
 const clientDistPath = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDistPath));
@@ -1518,6 +1574,7 @@ app.get('*', (req, res, next) => {
 });
 
 initDatabase().then(() => {
+  programarBackupDiario();
   app.listen(PORT, () => {
     console.log(`✅ Servidor Colonias de Verano corriendo en http://localhost:${PORT}`);
   });
