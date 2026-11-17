@@ -1,9 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Phone, MessageCircle, Printer, Download, ArrowLeft } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import HeaderValleViejo from '../ui/HeaderValleViejo';
-import { pdfHorizontalDesdeElemento } from '../../utils/pdfFicha';
+import { pdfHorizontalDesdeElemento, capturarFicha } from '../../utils/pdfFicha';
 import { asset } from '../../config';
 
 const PATOLOGIAS_LIST = [
@@ -106,12 +105,10 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
 
         // Renderizamos el clon a proporción exacta de hoja A4 Vertical (800px de ancho)
         // eliminando cualquier max-width o padding de contenedores móviles que antes la angostaban
-        const canvas = await html2canvas(element, {
+        const canvas = await capturarFicha(element, {
           scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
           windowWidth: 840,
-          onclone: (clonedDoc, clonedEl) => {
+          alClonar: (clonedDoc, clonedEl) => {
             let parent = clonedEl.parentElement;
             while (parent && parent !== clonedDoc.documentElement) {
               parent.style.maxWidth = 'none';
@@ -159,52 +156,14 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
         const contentHeightMm = pageHeight - margin * 2; // 289 mm
 
         const widthRatio = contentWidthMm / canvas.width;
-        const scaledHeightMm = canvas.height * widthRatio;
 
-        // Si cabe en 1 hoja A4 vertical (o con una tolerancia mínima ≤ 4%), ocupa toda la hoja sin partirse
-        if (scaledHeightMm <= contentHeightMm * 1.04) {
-          const fitRatio = Math.min(widthRatio, contentHeightMm / canvas.height);
-          const finalW = canvas.width * fitRatio;
-          const finalH = canvas.height * fitRatio;
-          const offsetX = (pageWidth - finalW) / 2;
-          const offsetY = (pageHeight - finalH) / 2;
-          const imgData = canvas.toDataURL('image/jpeg', 0.88);
-          pdf.addImage(imgData, 'JPEG', offsetX, offsetY, finalW, finalH, undefined, 'FAST');
-        } else {
-          // Si tiene observaciones médicas muy extensas que superan 1 carilla, pagina manteniendo el 100% del ancho
-          const pageHeightPx = Math.floor(contentHeightMm / widthRatio);
-          let currentYPx = 0;
-          let pageNum = 0;
-
-          while (currentYPx < canvas.height) {
-            if (pageNum > 0) pdf.addPage();
-            const sliceHeightPx = Math.min(pageHeightPx, canvas.height - currentYPx);
-            const sliceCanvas = document.createElement('canvas');
-            sliceCanvas.width = canvas.width;
-            sliceCanvas.height = sliceHeightPx;
-            const ctx = sliceCanvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, sliceHeightPx);
-            ctx.drawImage(
-              canvas,
-              0,
-              currentYPx,
-              canvas.width,
-              sliceHeightPx,
-              0,
-              0,
-              canvas.width,
-              sliceHeightPx
-            );
-
-            const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.88);
-            const sliceScaledHeight = sliceHeightPx * widthRatio;
-            pdf.addImage(sliceData, 'JPEG', margin, margin, contentWidthMm, sliceScaledHeight, undefined, 'FAST');
-
-            currentYPx += sliceHeightPx;
-            pageNum++;
-          }
-        }
+        // Siempre en una sola hoja: si la ficha es más larga que un A4 (observaciones muy extensas),
+        // se achica proporcionalmente en vez de partirla en dos páginas.
+        const fitRatio = Math.min(widthRatio, contentHeightMm / canvas.height);
+        const finalW = canvas.width * fitRatio;
+        const finalH = canvas.height * fitRatio;
+        const imgData = canvas.toDataURL('image/jpeg', 0.88);
+        pdf.addImage(imgData, 'JPEG', (pageWidth - finalW) / 2, (pageHeight - finalH) / 2, finalW, finalH, undefined, 'FAST');
 
         pdf.save(`Ficha_Medica_${nino.apellido_nombre || 'Colonia'}_DNI_${nino.dni}.pdf`);
       } else {
