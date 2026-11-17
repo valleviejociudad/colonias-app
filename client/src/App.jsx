@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import FormularioInscripcionPage from './pages/public/FormularioInscripcionPage';
 import VerFichaPublicaPage from './pages/public/VerFichaPublicaPage';
@@ -7,6 +7,7 @@ import LoginPage from './pages/auth/LoginPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import ImprimirFichasPage from './pages/admin/ImprimirFichasPage';
 import { BASE_PATH } from './config';
+import { sincronizarPwa } from './pwa';
 
 function ProtectedRoute({ children }) {
   const { user, token } = useAuth();
@@ -14,6 +15,15 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
   return children;
+}
+
+// Saca o pone el manifest de la app instalable según la página (las públicas no se pueden instalar)
+function PwaSegunRuta() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    sincronizarPwa(pathname);
+  }, [pathname]);
+  return null;
 }
 
 // Impresión masiva: admin o usuarios con permiso de Backups
@@ -28,6 +38,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter basename={BASE_PATH}>
+        <PwaSegunRuta />
         <Routes>
           <Route path="/" element={<Navigate to="/admin" replace />} />
           <Route path="/inscripcion" element={<FormularioInscripcionPage />} />
