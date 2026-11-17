@@ -16,11 +16,11 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-// Solo el rol admin (Backups e impresión masiva)
-function AdminRoute({ children }) {
+// Impresión masiva: admin o usuarios con permiso de Backups
+function BackupsRoute({ children }) {
   const { user, token } = useAuth();
   if (!user || !token) return <Navigate to="/login" replace />;
-  if (user.rol !== 'admin') return <Navigate to="/admin" replace />;
+  if (user.rol !== 'admin' && !user.permisos?.secciones?.includes('backups')) return <Navigate to="/admin" replace />;
   return children;
 }
 
@@ -36,9 +36,9 @@ export default function App() {
           <Route
             path="/admin/imprimir"
             element={
-              <AdminRoute>
+              <BackupsRoute>
                 <ImprimirFichasPage />
-              </AdminRoute>
+              </BackupsRoute>
             }
           />
           <Route

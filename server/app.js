@@ -103,8 +103,9 @@ function authMiddleware(req, res, next) {
 
 // ==================== PERMISOS ====================
 // Secciones de la barra lateral que se pueden habilitar a un usuario no admin.
-// Backups y Usuarios son siempre solo de admin.
-const SECCIONES = ['fichas', 'dashboard', 'clima', 'galeria'];
+// "backups" da Excel y ZIP de PDF; el backup completo (.sqlite) y Usuarios son siempre solo de admin,
+// porque el .sqlite incluye las cuentas de usuario.
+const SECCIONES = ['fichas', 'dashboard', 'clima', 'galeria', 'backups'];
 
 function leerPermisos(raw) {
   let p = {};
@@ -459,7 +460,7 @@ app.get('/api/inscripciones/verificar-dni/:dni', consultaPublicaLimiter, (req, r
 
 // ==================== INSCRIPCIONES & FICHAS MEDICAS ====================
 
-app.get('/api/inscripciones', authMiddleware, requireSeccion('fichas', 'dashboard'), (req, res) => {
+app.get('/api/inscripciones', authMiddleware, requireSeccion('fichas', 'dashboard', 'backups'), (req, res) => {
   const { queryAll } = getDb();
   const rows = queryAll(`
     SELECT
@@ -499,7 +500,7 @@ app.get('/api/inscripciones', authMiddleware, requireSeccion('fichas', 'dashboar
   res.json(rows);
 });
 
-app.get('/api/inscripciones/:id', authMiddleware, requireSeccion('fichas', 'dashboard'), (req, res) => {
+app.get('/api/inscripciones/:id', authMiddleware, requireSeccion('fichas', 'dashboard', 'backups'), (req, res) => {
   const full = getFullInscripcionById(req.params.id);
   if (!full) return res.status(404).json({ error: 'Ficha médica no encontrada' });
   res.json(full);

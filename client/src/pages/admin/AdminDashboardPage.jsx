@@ -86,10 +86,16 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 900px)');
-    const handleResize = (e) => setIsMobileView(e.matches);
-    setIsMobileView(mediaQuery.matches);
-    mediaQuery.addEventListener('change', handleResize);
-    return () => mediaQuery.removeEventListener('change', handleResize);
+    // Se relee el media query también en "resize": algunos navegadores no avisan el cambio
+    // (por ejemplo al rotar o redimensionar rápido) y quedaba la vista equivocada.
+    const sync = () => setIsMobileView(mediaQuery.matches);
+    sync();
+    mediaQuery.addEventListener('change', sync);
+    window.addEventListener('resize', sync);
+    return () => {
+      mediaQuery.removeEventListener('change', sync);
+      window.removeEventListener('resize', sync);
+    };
   }, []);
 
   const [errorOperacion, setErrorOperacion] = useState(null);
@@ -99,7 +105,7 @@ export default function AdminDashboardPage() {
     try {
       // Las fichas solo se piden si el usuario ve Fichas o Estadísticas (el servidor igual lo controla)
       const veFichas =
-        user?.rol === 'admin' || (user?.permisos?.secciones || []).some((s) => s === 'fichas' || s === 'dashboard');
+        user?.rol === 'admin' || (user?.permisos?.secciones || []).some((s) => s === 'fichas' || s === 'dashboard' || s === 'backups');
       const [resIns, resCol, resAle] = await Promise.all([
         veFichas ? authFetch(`${API_BASE}/inscripciones`) : null,
         authFetch(`${API_BASE}/colonias`),
@@ -236,9 +242,11 @@ export default function AdminDashboardPage() {
 
   const esAdmin = user?.rol === 'admin';
   const permisos = esAdmin
-    ? { secciones: ['fichas', 'dashboard', 'clima', 'galeria'], editar_fichas: true, eliminar_fichas: true }
+    ? { secciones: ['fichas', 'dashboard', 'clima', 'galeria', 'backups'], editar_fichas: true, eliminar_fichas: true }
     : user?.permisos || { secciones: ['fichas'], editar_fichas: false, eliminar_fichas: false };
-  const puedeVerBackups = esAdmin && !isMobileView;
+  // Backups y Usuarios solo se muestran en PC, nunca en el celular
+  const puedeVerBackups = Boolean(permisos.secciones?.includes('backups')) && !isMobileView;
+  const puedeVerUsuarios = esAdmin && !isMobileView;
 
   const navItems = [
     { id: 'fichas', label: 'Fichas médicas', shortLabel: 'Fichas', icon: HeartPulse },
@@ -248,9 +256,9 @@ export default function AdminDashboardPage() {
   ]
     .filter((item) => permisos.secciones?.includes(item.id))
     .concat(
-      // Backups: solo admin y solo en PC. Usuarios: solo admin.
+      // Backups: con permiso y solo en PC. Usuarios: solo admin y solo en PC.
       puedeVerBackups ? [{ id: 'backups', label: 'Backups', shortLabel: 'Backups', icon: DatabaseBackup }] : [],
-      esAdmin ? [{ id: 'usuarios', label: 'Usuarios', shortLabel: 'Usuarios', icon: Users }] : []
+      puedeVerUsuarios ? [{ id: 'usuarios', label: 'Usuarios', shortLabel: 'Usuarios', icon: Users }] : []
     );
   const tabsPermitidas = navItems.map((n) => n.id).join(',');
 
@@ -445,6 +453,20 @@ export default function AdminDashboardPage() {
             </motion.div>
           ) : (
             <>
+              {navItems.length === 0 && (
+                <div className="empty-state">
+                  <div className="empty-icon">
+                    <DatabaseBackup size={30} />
+                  </div>
+                  <h3>No hay secciones para ver en el celular</h3>
+                  <p>
+                    {permisos.secciones?.includes('backups')
+                      ? 'Tu usuario solo tiene acceso a Backups, que se usa desde una computadora.'
+                      : 'Tu usuario no tiene secciones habilitadas. Pedile acceso a un administrador.'}
+                  </p>
+                </div>
+              )}
+
               {/* ==================== FICHAS ==================== */}
               {activeTab === 'fichas' && permisos.secciones?.includes('fichas') && (
                 <motion.div key="fichas" {...tabMotion}>
@@ -872,7 +894,7 @@ export default function AdminDashboardPage() {
               )}
 
               {/* ==================== USUARIOS ==================== */}
-              {activeTab === 'usuarios' && esAdmin && (
+              {activeTab === 'usuarios' && puedeVerUsuarios && (
                 <motion.div key="usuarios" {...tabMotion}>
                   <UsuariosPanel
                     authFetch={authFetch}

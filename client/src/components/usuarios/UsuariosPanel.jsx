@@ -3,12 +3,17 @@ import { UserPlus, Edit3, Trash2, Check, AlertCircle, CheckCircle2, ShieldCheck,
 import { API_BASE } from '../../config';
 import Hoja from '../ui/Hoja';
 
-// Secciones de la barra lateral que se pueden dar a un usuario. Backups y Usuarios son siempre solo de admin.
+// Secciones de la barra lateral que se pueden dar a un usuario. Usuarios es siempre solo de admin.
 export const SECCIONES_USUARIO = [
   { id: 'fichas', label: 'Fichas médicas', sub: 'Buscar niños/as, ver fichas y llamar a las familias.' },
   { id: 'dashboard', label: 'Estadísticas', sub: 'Resumen de inscriptos y condiciones de salud.' },
   { id: 'clima', label: 'Avisos por clima', sub: 'Publicar avisos y suspender actividades.' },
-  { id: 'galeria', label: 'Banco de imágenes', sub: 'Subir y ver fotos de las colonias.' }
+  { id: 'galeria', label: 'Banco de imágenes', sub: 'Subir y ver fotos de las colonias.' },
+  {
+    id: 'backups',
+    label: 'Backups',
+    sub: 'Descargar las fichas en Excel y en PDF. Solo en PC. El backup completo de la base queda solo para administradores.'
+  }
 ];
 
 const PERMISOS_NUEVO = { secciones: ['fichas', 'dashboard'], editar_fichas: false, eliminar_fichas: false };
