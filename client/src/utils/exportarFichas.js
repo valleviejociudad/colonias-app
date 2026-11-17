@@ -1,4 +1,4 @@
-// Exporta las fichas a un CSV que Excel abre directo (separador ";" y BOM UTF-8 para los acentos).
+// Exporta las fichas a una planilla Excel (.xlsx) con todos los datos.
 
 const PATOLOGIAS = [
   ['alergias', 'Alergias'],
@@ -65,22 +65,37 @@ const COLUMNAS = [
   ['Estado', (f) => f.estado]
 ];
 
-function celda(valor) {
-  let s = valor === null || valor === undefined ? '' : String(valor);
-  // Evita que Excel interprete el contenido como fórmula (=, @, o +/- que no sean un teléfono)
-  if (/^[=@\t\r]/.test(s) || /^[+-](?![\d\s(])/.test(s)) s = `'${s}`;
-  // DNI y teléfonos: forzar texto para que Excel no los pase a notación científica ni les quite ceros
-  else if (/^\+?\d[\d\s()-]{6,}$/.test(s) && !/^\d{4}-\d{2}-\d{2}$/.test(s)) return `="${s}"`;
-  if (/[;"\n\r]/.test(s)) s = `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
+// Excel: con "todas", una hoja "Todas" más una hoja por colonia; si no, una sola hoja.
+export async function fichasAXlsx(fichas, nombreHoja) {
+  const encabezados = COLUMNAS.map(([titulo]) => titulo);
+  const aFilas = (lista) =>
+    lista.map((f) =>
+      COLUMNAS.map(([titulo, get]) => {
+        const v = get(f);
+        if (titulo === 'Edad' && v !== '' && v !== null && !Number.isNaN(Number(v))) return Number(v);
+        return v === null || v === undefined ? '' : String(v);
+      })
+    );
+  const ordenadas = [...fichas].sort(
+    (a, b) =>
+      String(a.colonia_nombre || '').localeCompare(String(b.colonia_nombre || ''), 'es') ||
+      String(a.nino_nombre || '').localeCompare(String(b.nino_nombre || ''), 'es')
+  );
 
-export function fichasACsv(fichas) {
-  const filas = [COLUMNAS.map(([titulo]) => celda(titulo)).join(';')];
-  for (const f of fichas) {
-    filas.push(COLUMNAS.map(([, get]) => celda(get(f))).join(';'));
+  const hojas = [{ nombre: nombreHoja, encabezados, filas: aFilas(ordenadas) }];
+  if (!nombreHoja || nombreHoja === 'Todas') {
+    const porColonia = new Map();
+    for (const f of ordenadas) {
+      const k = f.colonia_nombre || 'Sin colonia';
+      if (!porColonia.has(k)) porColonia.set(k, []);
+      porColonia.get(k).push(f);
+    }
+    if (porColonia.size > 1) {
+      for (const [nombre, lista] of porColonia) hojas.push({ nombre, encabezados, filas: aFilas(lista) });
+    }
   }
-  return '﻿' + filas.join('\r\n');
+  const { crearXlsx } = await import('./xlsx');
+  return crearXlsx(hojas);
 }
 
 export function descargarArchivo(contenido, nombre, tipo) {

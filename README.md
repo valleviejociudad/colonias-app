@@ -90,9 +90,9 @@ DB_PATH=/data/colonias.sqlite
 
 > ⚠️ **Sin el Volume + DB_PATH, la base de datos se borra en cada nuevo deploy.** Es obligatorio para no perder inscripciones.
 
-**Copias de las fichas.** En *Fichas médicas* hay una barra *Copias de las fichas* que respeta la localidad elegida:
-- **Excel:** descarga un `.csv` (se abre con Excel) con una fila por niño/a y todos los datos.
-- **Imprimir / PDF:** abre todas las fichas de la localidad, una por hoja, para imprimir o guardar como PDF.
+**Copias de las fichas.** En la sección **Backups** de la barra lateral, eligiendo la localidad (o todas):
+- **Excel:** descarga un `.xlsx` con una fila por niño/a y todos los datos (con "Todas", una hoja general y una por colonia).
+- **Fichas en PDF:** genera en el navegador un `.zip` con un PDF por ficha (una carpeta por colonia). Tarda ~1 s por ficha. También está *Imprimir todas*.
 - **Backup completo** (solo admin): descarga el archivo `.sqlite` entero. Para restaurarlo, se sube al Volume como `/data/colonias.sqlite`.
 
 Backup automático por mail (optativo, requiere SMTP):

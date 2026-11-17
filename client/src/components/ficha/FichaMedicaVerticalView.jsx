@@ -3,6 +3,7 @@ import { Phone, MessageCircle, Printer, Download, ArrowLeft } from 'lucide-react
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import HeaderValleViejo from '../ui/HeaderValleViejo';
+import { pdfHorizontalDesdeElemento } from '../../utils/pdfFicha';
 import { asset } from '../../config';
 
 const PATOLOGIAS_LIST = [
@@ -22,7 +23,8 @@ const PATOLOGIAS_LIST = [
 ];
 
 // soloPlanilla: muestra únicamente la hoja (sin barras ni botones), para la impresión masiva.
-export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton = true, hideAdminToolbar = false, soloPlanilla = false }) {
+// layout: 'horizontal' | 'vertical' fuerza el diseño; sin valor, depende del ancho de pantalla.
+export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton = true, hideAdminToolbar = false, soloPlanilla = false, layout }) {
   const sheetRef = useRef(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
@@ -42,6 +44,8 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
   }, []);
 
   if (!ficha) return null;
+
+  const usarVertical = layout ? layout === 'vertical' : isMobile;
 
   // Normaliza estructura plana o anidada
   const padre = ficha.padre || {
@@ -204,31 +208,8 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
 
         pdf.save(`Ficha_Medica_${nino.apellido_nombre || 'Colonia'}_DNI_${nino.dni}.pdf`);
       } else {
-        // ── LANDSCAPE: una sola página con fit proporcional (sin cambios) ──
-        const canvas = await html2canvas(element, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          windowWidth: 1200
-        });
-
-        const imgData = canvas.toDataURL('image/jpeg', 0.88);
-        const pdf = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4', compress: true });
-
-        const pageWidth  = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const margin = 6;
-
-        const maxWidth  = pageWidth  - margin * 2;
-        const maxHeight = pageHeight - margin * 2;
-
-        const ratio       = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
-        const finalWidth  = canvas.width  * ratio;
-        const finalHeight = canvas.height * ratio;
-        const offsetX     = (pageWidth  - finalWidth)  / 2;
-        const offsetY     = (pageHeight - finalHeight) / 2;
-
-        pdf.addImage(imgData, 'JPEG', offsetX, offsetY, finalWidth, finalHeight, undefined, 'FAST');
+        // ── LANDSCAPE: una sola página con fit proporcional ──
+        const pdf = await pdfHorizontalDesdeElemento(element);
         pdf.save(`Ficha_Medica_${nino.apellido_nombre || 'Colonia'}_DNI_${nino.dni}.pdf`);
       }
     } catch (err) {
@@ -628,7 +609,7 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
       {/* ═══════════════════════════════════════════════════════════
           PLANILLA — MOBILE: 1 columna vertical (Portrait)
           ═══════════════════════════════════════════════════════════ */}
-      {isMobile ? (
+      {usarVertical ? (
         <div ref={sheetRef} className="ficha-vertical-sheet">
           <HeaderValleViejo
             compact={true}

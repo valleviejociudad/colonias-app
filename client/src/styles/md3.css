@@ -1794,19 +1794,22 @@ md-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
 }
 
 /* ==========================================================================
- * Barra de copias (Excel / Imprimir / Backup) en Fichas médicas
+ * Backups: copias de las fichas (Excel, ZIP de PDF, backup completo)
  * ========================================================================== */
-.export-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
-  padding: 12px 16px; margin: -6px 0 16px;
-}
-.export-bar-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.export-bar-text strong { font-size: 1rem; }
-.export-bar-text span { color: var(--ink-2); font-size: 0.92rem; }
-.export-bar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.backups { display: grid; gap: 16px; }
+.backup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: stretch; }
+.backup-card { display: flex; flex-direction: column; gap: 10px; }
+.backup-card h3 { margin: 0; }
+.backup-card .stats-note { flex: 1; margin: 0; }
+.backup-card > .md3-btn { align-self: flex-start; }
+.backup-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--pool-wash); color: var(--pool-ink); }
+.backup-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.backup-progress { display: grid; gap: 8px; }
+.backup-progress .md3-btn { justify-self: start; }
+.backup-progress-label { display: flex; justify-content: space-between; font-weight: 600; font-variant-numeric: tabular-nums; }
+.backup-progress .bar-fill { transition: width 200ms linear; }
+.backup-mail { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 0; padding-top: 10px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 0.92rem; }
+.backup-mail svg { flex-shrink: 0; margin-top: 2px; }
 @media (max-width: 900px) {
-  .export-bar { padding: 12px; border-radius: var(--r-md); }
-  .export-bar-actions { width: 100%; }
-  .export-bar-actions .md3-btn { flex: 1 1 auto; justify-content: center; }
+  .backup-card > .md3-btn, .backup-actions .md3-btn { width: 100%; justify-content: center; }
 }

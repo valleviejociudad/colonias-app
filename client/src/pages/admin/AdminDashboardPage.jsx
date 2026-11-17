@@ -19,8 +19,6 @@ import {
   X,
   AlertCircle,
   SearchX,
-  FileSpreadsheet,
-  Printer,
   DatabaseBackup
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -29,8 +27,8 @@ import FichaMedicaVerticalView from '../../components/ficha/FichaMedicaVerticalV
 import EstadisticasPanel from '../../components/stats/EstadisticasPanel';
 import GaleriaPanel from '../../components/galeria/GaleriaPanel';
 import AvisosClimaPanel from '../../components/clima/AvisosClimaPanel';
+import BackupsPanel from '../../components/backups/BackupsPanel';
 import { API_BASE, asset } from '../../config';
-import { fichasACsv, descargarArchivo, slug, fechaHoy } from '../../utils/exportarFichas';
 
 const PATOLOGIAS_KEYS = [
   { key: 'alergias', label: 'Alergia' },
@@ -172,49 +170,6 @@ export default function AdminDashboardPage() {
     return m;
   }, [inscripciones]);
 
-  const coloniaFiltroNombre =
-    selectedColoniaFilter === 'todas'
-      ? 'todas las colonias'
-      : colonias.find((c) => String(c.id) === String(selectedColoniaFilter))?.nombre || 'esta colonia';
-
-  // Excel: respeta la colonia elegida en los filtros (no la búsqueda por texto)
-  const handleDescargarExcel = () => {
-    const lista = inscripciones.filter(
-      (f) => selectedColoniaFilter === 'todas' || String(f.colonia_id) === String(selectedColoniaFilter)
-    );
-    descargarArchivo(
-      fichasACsv(lista),
-      `fichas_${slug(selectedColoniaFilter === 'todas' ? 'todas' : coloniaFiltroNombre)}_${fechaHoy()}.csv`,
-      'text/csv;charset=utf-8'
-    );
-  };
-
-  const [descargandoBackup, setDescargandoBackup] = useState(false);
-  const handleDescargarBackup = async () => {
-    setErrorOperacion(null);
-    setDescargandoBackup(true);
-    try {
-      const res = await authFetch(`${API_BASE}/backup`);
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setErrorOperacion(data.error || 'No se pudo descargar el backup.');
-        return;
-      }
-      const nombre =
-        /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] ||
-        `colonias_backup_${fechaHoy()}.sqlite`;
-      descargarArchivo(await res.blob(), nombre);
-    } catch (err) {
-      if (err.code === 'UNAUTHORIZED') {
-        navigate('/login');
-        return;
-      }
-      setErrorOperacion('No se pudo descargar el backup. Probá de nuevo.');
-    } finally {
-      setDescargandoBackup(false);
-    }
-  };
-
   const handleEliminarFicha = async (id, nombre) => {
     if (!window.confirm(`¿Seguro que querés eliminar la ficha de ${nombre}? Esto no se puede deshacer.`)) return;
     try {
@@ -283,7 +238,8 @@ export default function AdminDashboardPage() {
     { id: 'fichas', label: 'Fichas médicas', shortLabel: 'Fichas', icon: HeartPulse },
     { id: 'dashboard', label: 'Estadísticas', shortLabel: 'Estadísticas', icon: BarChart3 },
     { id: 'clima', label: 'Avisos por clima', shortLabel: 'Avisos', icon: CloudLightning },
-    { id: 'galeria', label: 'Banco de imágenes', shortLabel: 'Imágenes', icon: Images }
+    { id: 'galeria', label: 'Banco de imágenes', shortLabel: 'Imágenes', icon: Images },
+    { id: 'backups', label: 'Backups', shortLabel: 'Backups', icon: DatabaseBackup }
   ];
 
   const cambiarTab = (id) => {
@@ -548,37 +504,6 @@ export default function AdminDashboardPage() {
                       ))}
                     </div>
                   </section>
-
-                  {inscripciones.length > 0 && (
-                    <section className="export-bar" aria-label="Descargar fichas">
-                      <div className="export-bar-text">
-                        <strong>Copias de las fichas</strong>
-                        <span>De {coloniaFiltroNombre}. Cambiá la localidad arriba para descargar otra.</span>
-                      </div>
-                      <div className="export-bar-actions">
-                        <button className="md3-btn md3-btn-tonal" onClick={handleDescargarExcel}>
-                          <FileSpreadsheet size={18} /> Excel
-                        </button>
-                        <Link
-                          to={`/admin/imprimir?colonia=${encodeURIComponent(selectedColoniaFilter)}`}
-                          target="_blank"
-                          className="md3-btn md3-btn-tonal"
-                        >
-                          <Printer size={18} /> Imprimir / PDF
-                        </Link>
-                        {user?.rol === 'admin' && (
-                          <button
-                            className="md3-btn md3-btn-outlined"
-                            onClick={handleDescargarBackup}
-                            disabled={descargandoBackup}
-                            title="Copia completa de la base de datos, para restaurar todo si algo falla"
-                          >
-                            <DatabaseBackup size={18} /> {descargandoBackup ? 'Descargando…' : 'Backup completo'}
-                          </button>
-                        )}
-                      </div>
-                    </section>
-                  )}
 
                   {(searchQuery || selectedColoniaFilter !== 'todas') && !loading && (
                     <p style={{ margin: '0 4px 10px', color: 'var(--ink-2)' }}>
@@ -898,6 +823,25 @@ export default function AdminDashboardPage() {
                     }}
                     onUnauthorized={() => navigate('/login')}
                   />
+                </motion.div>
+              )}
+
+              {/* ==================== BACKUPS ==================== */}
+              {activeTab === 'backups' && (
+                <motion.div key="backups" {...tabMotion}>
+                  {loading && inscripciones.length === 0 ? (
+                    <div className="skeleton" style={{ height: 220 }} />
+                  ) : (
+                    <BackupsPanel
+                      inscripciones={inscripciones}
+                      colonias={colonias}
+                      laneColor={laneColor}
+                      authFetch={authFetch}
+                      user={user}
+                      isMobileView={isMobileView}
+                      onUnauthorized={() => navigate('/login')}
+                    />
+                  )}
                 </motion.div>
               )}
 

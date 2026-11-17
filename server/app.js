@@ -1536,6 +1536,20 @@ app.get('/api/backup', authMiddleware, requireRole('admin'), (req, res) => {
   }
 });
 
+// Estado del backup automático (para mostrarlo en el panel; no expone la casilla completa)
+app.get('/api/backup/estado', authMiddleware, requireRole('admin'), (req, res) => {
+  const destino = String(process.env.BACKUP_EMAIL || '').trim();
+  const smtp = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  const horaCfg = Number(process.env.BACKUP_HORA ?? 3);
+  const oculto = destino.replace(/^(.{2}).*(@.*)$/, '$1•••$2');
+  res.json({
+    mailDiario: Boolean(destino) && smtp,
+    destino: destino ? oculto : null,
+    faltaSmtp: Boolean(destino) && !smtp,
+    hora: Number.isInteger(horaCfg) && horaCfg >= 0 && horaCfg <= 23 ? horaCfg : 3
+  });
+});
+
 // Backup automático por mail: solo si BACKUP_EMAIL está configurado (y SMTP también).
 // Se manda una vez al día a la hora BACKUP_HORA (0-23, hora de Argentina; por defecto 3).
 function programarBackupDiario() {
