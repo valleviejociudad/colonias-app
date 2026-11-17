@@ -26,7 +26,6 @@ if (!JWT_SECRET || INSECURE_SECRETS.includes(JWT_SECRET) || JWT_SECRET.length < 
 }
 const SIGNING_SECRET = JWT_SECRET || crypto.randomBytes(32).toString('hex');
 const TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h';
-const ROLES_VALIDOS = ['admin', 'coordinador', 'lectura'];
 
 // Railway / proxies: necesario para que el rate limit use la IP real del cliente
 app.set('trust proxy', 1);
@@ -88,13 +87,55 @@ function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'No autorizado' });
   }
   const token = authHeader.split(' ')[1];
+  let decoded;
   try {
-    const decoded = jwt.verify(token, SIGNING_SECRET);
-    req.user = decoded;
-    next();
+    decoded = jwt.verify(token, SIGNING_SECRET);
   } catch (err) {
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
+  // Se lee el usuario de la base en cada pedido: si un admin cambia sus permisos o lo elimina,
+  // el cambio vale enseguida, sin esperar a que venza la sesión.
+  const u = getDb().queryOne('SELECT id, nombre, email, rol, avatar, permisos, created_at FROM usuarios WHERE id = ?', [decoded.id]);
+  if (!u) return res.status(401).json({ error: 'Tu usuario ya no existe. Pedile acceso a un administrador.' });
+  req.user = usuarioPublico(u);
+  next();
+}
+
+// ==================== PERMISOS ====================
+// Secciones de la barra lateral que se pueden habilitar a un usuario no admin.
+// Backups y Usuarios son siempre solo de admin.
+const SECCIONES = ['fichas', 'dashboard', 'clima', 'galeria'];
+
+function leerPermisos(raw) {
+  let p = {};
+  try {
+    p = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw || {};
+  } catch (_) {
+    p = {};
+  }
+  const secciones = Array.isArray(p.secciones) ? SECCIONES.filter((s) => p.secciones.includes(s)) : ['fichas'];
+  return {
+    secciones,
+    editar_fichas: secciones.includes('fichas') && p.editar_fichas === true,
+    eliminar_fichas: secciones.includes('fichas') && p.eliminar_fichas === true
+  };
+}
+
+function permisosEfectivos(u) {
+  if (u?.rol === 'admin') return { secciones: [...SECCIONES], editar_fichas: true, eliminar_fichas: true };
+  return leerPermisos(u?.permisos);
+}
+
+function usuarioPublico(u) {
+  return {
+    id: u.id,
+    nombre: u.nombre,
+    email: u.email,
+    rol: u.rol === 'admin' ? 'admin' : 'coordinador',
+    avatar: u.avatar || null,
+    created_at: u.created_at,
+    permisos: permisosEfectivos(u)
+  };
 }
 
 // Autorización por rol (siempre usar después de authMiddleware)
@@ -107,11 +148,19 @@ function requireRole(...roles) {
   };
 }
 
-function escribeFichas(req, res, next) {
-  if (req.user && String(req.user.rol).toLowerCase() === 'lectura') {
-    return res.status(403).json({ error: 'Tu rol es de solo lectura' });
-  }
-  next();
+// Pasa si el usuario tiene habilitada alguna de estas secciones
+function requireSeccion(...secciones) {
+  return (req, res, next) => {
+    if (req.user?.rol === 'admin' || secciones.some((s) => req.user?.permisos?.secciones?.includes(s))) return next();
+    return res.status(403).json({ error: 'No tenés acceso a esta sección' });
+  };
+}
+
+function requirePermiso(permiso, mensaje) {
+  return (req, res, next) => {
+    if (req.user?.rol === 'admin' || req.user?.permisos?.[permiso] === true) return next();
+    return res.status(403).json({ error: mensaje || 'No tenés permisos para realizar esta acción' });
+  };
 }
 
 // Celular argentino -> 10 dígitos (código de área + número, sin 0 ni 15). null si no se puede interpretar.
@@ -179,54 +228,115 @@ app.post('/api/auth/login', loginLimiter, (req, res) => {
     { expiresIn: TOKEN_EXPIRES_IN }
   );
 
-  res.json({
-    token,
-    user: {
-      id: user.id,
-      nombre: user.nombre,
-      email: user.email,
-      rol: user.rol,
-      avatar: user.avatar
-    }
-  });
+  res.json({ token, user: usuarioPublico(user) });
 });
 
 app.get('/api/auth/me', authMiddleware, (req, res) => {
-  const { queryOne } = getDb();
-  const user = queryOne('SELECT id, nombre, email, rol, avatar, created_at FROM usuarios WHERE id = ?', [req.user.id]);
-  if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-  res.json({ user });
+  res.json({ user: req.user });
 });
+
+// ==================== USUARIOS (solo admin) ====================
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Valida y normaliza los datos de un usuario. Devuelve { error } o { datos }.
+function validarUsuario(body, { esNuevo }) {
+  const nombre = String(body.nombre || '').trim();
+  const email = String(body.email || '').trim().toLowerCase();
+  const password = body.password ? String(body.password) : '';
+  const rol = body.rol === 'admin' ? 'admin' : 'coordinador';
+
+  if (!nombre || nombre.length > 80) return { error: 'Escribí el nombre (hasta 80 letras).' };
+  if (!EMAIL_RE.test(email) || email.length > 120) return { error: 'Escribí un correo válido.' };
+  if (esNuevo && !password) return { error: 'Escribí una contraseña.' };
+  if (password && (password.length < 8 || password.length > 100)) {
+    return { error: 'La contraseña tiene que tener al menos 8 caracteres.' };
+  }
+
+  let permisos = null;
+  if (rol !== 'admin') {
+    permisos = leerPermisos(body.permisos);
+    if (permisos.secciones.length === 0) return { error: 'Elegí al menos una sección que pueda ver.' };
+  }
+  return { datos: { nombre, email, password, rol, permisos } };
+}
+
+function contarAdmins(excluirId) {
+  const r = getDb().queryOne("SELECT COUNT(*) as n FROM usuarios WHERE rol = 'admin' AND id != ?", [excluirId || 0]);
+  return r ? r.n : 0;
+}
 
 app.get('/api/auth/usuarios', authMiddleware, requireRole('admin'), (req, res) => {
   const { queryAll } = getDb();
-  const usuarios = queryAll('SELECT id, nombre, email, rol, created_at FROM usuarios ORDER BY id ASC');
-  res.json(usuarios);
+  const usuarios = queryAll('SELECT id, nombre, email, rol, avatar, permisos, created_at FROM usuarios ORDER BY nombre COLLATE NOCASE ASC');
+  res.json(usuarios.map(usuarioPublico));
 });
 
 app.post('/api/auth/usuarios', authMiddleware, requireRole('admin'), (req, res) => {
-  const { nombre, email, password, rol } = req.body;
-  const { queryOne, runQuery } = getDb();
-  if (!nombre || !email || !password) {
-    return res.status(400).json({ error: 'Completá todos los campos del usuario' });
+  const { error, datos } = validarUsuario(req.body || {}, { esNuevo: true });
+  if (error) return res.status(400).json({ error });
+  const { queryOne, runQueryAndSave } = getDb();
+
+  if (queryOne('SELECT id FROM usuarios WHERE lower(email) = lower(?)', [datos.email])) {
+    return res.status(409).json({ error: 'Ya existe un usuario con ese correo.' });
   }
-  const rolFinal = rol || 'coordinador';
-  if (!ROLES_VALIDOS.includes(rolFinal)) {
-    return res.status(400).json({ error: 'Rol inválido' });
+  const result = runQueryAndSave('INSERT INTO usuarios (nombre, email, password_hash, rol, permisos) VALUES (?, ?, ?, ?, ?)', [
+    datos.nombre,
+    datos.email,
+    bcrypt.hashSync(datos.password, 10),
+    datos.rol,
+    datos.permisos ? JSON.stringify(datos.permisos) : null
+  ]);
+  const creado = queryOne('SELECT id, nombre, email, rol, avatar, permisos, created_at FROM usuarios WHERE id = ?', [result.lastInsertRowid]);
+  res.status(201).json(usuarioPublico(creado));
+});
+
+app.put('/api/auth/usuarios/:id', authMiddleware, requireRole('admin'), (req, res) => {
+  const id = Number.parseInt(req.params.id, 10);
+  const { queryOne, runQueryAndSave } = getDb();
+  const actual = queryOne('SELECT id, rol FROM usuarios WHERE id = ?', [id]);
+  if (!actual) return res.status(404).json({ error: 'Ese usuario ya no existe.' });
+
+  const { error, datos } = validarUsuario(req.body || {}, { esNuevo: false });
+  if (error) return res.status(400).json({ error });
+
+  if (actual.rol === 'admin' && datos.rol !== 'admin') {
+    if (id === Number(req.user.id)) {
+      return res.status(400).json({ error: 'No podés quitarte a vos mismo el acceso de administrador.' });
+    }
+    if (contarAdmins(id) === 0) {
+      return res.status(400).json({ error: 'Tiene que quedar al menos un administrador.' });
+    }
   }
-  if (String(password).length < 8) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+  if (queryOne('SELECT id FROM usuarios WHERE lower(email) = lower(?) AND id != ?', [datos.email, id])) {
+    return res.status(409).json({ error: 'Ya existe otro usuario con ese correo.' });
   }
-  const existing = queryOne('SELECT id FROM usuarios WHERE lower(email) = lower(?)', [email.trim()]);
-  if (existing) {
-    return res.status(409).json({ error: 'Ya existe un usuario con ese correo electrónico' });
+
+  const permisosJson = datos.permisos ? JSON.stringify(datos.permisos) : null;
+  if (datos.password) {
+    runQueryAndSave('UPDATE usuarios SET nombre = ?, email = ?, rol = ?, permisos = ?, password_hash = ? WHERE id = ?', [
+      datos.nombre, datos.email, datos.rol, permisosJson, bcrypt.hashSync(datos.password, 10), id
+    ]);
+  } else {
+    runQueryAndSave('UPDATE usuarios SET nombre = ?, email = ?, rol = ?, permisos = ? WHERE id = ?', [
+      datos.nombre, datos.email, datos.rol, permisosJson, id
+    ]);
   }
-  const hash = bcrypt.hashSync(password, 10);
-  const result = runQuery(
-    'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)',
-    [nombre.trim(), email.trim(), hash, rolFinal]
-  );
-  res.status(201).json({ id: result.lastInsertRowid, nombre, email, rol: rolFinal });
+  const editado = queryOne('SELECT id, nombre, email, rol, avatar, permisos, created_at FROM usuarios WHERE id = ?', [id]);
+  res.json(usuarioPublico(editado));
+});
+
+app.delete('/api/auth/usuarios/:id', authMiddleware, requireRole('admin'), (req, res) => {
+  const id = Number.parseInt(req.params.id, 10);
+  const { queryOne, runQueryAndSave } = getDb();
+  const actual = queryOne('SELECT id, rol FROM usuarios WHERE id = ?', [id]);
+  if (!actual) return res.status(404).json({ error: 'Ese usuario ya no existe.' });
+  if (id === Number(req.user.id)) return res.status(400).json({ error: 'No podés eliminar tu propio usuario.' });
+  if (actual.rol === 'admin' && contarAdmins(id) === 0) {
+    return res.status(400).json({ error: 'Tiene que quedar al menos un administrador.' });
+  }
+  runQueryAndSave('DELETE FROM usuarios WHERE id = ?', [id]);
+  res.json({ ok: true });
 });
 
 // ==================== COLONIAS ROUTES ====================
@@ -349,7 +459,7 @@ app.get('/api/inscripciones/verificar-dni/:dni', consultaPublicaLimiter, (req, r
 
 // ==================== INSCRIPCIONES & FICHAS MEDICAS ====================
 
-app.get('/api/inscripciones', authMiddleware, (req, res) => {
+app.get('/api/inscripciones', authMiddleware, requireSeccion('fichas', 'dashboard'), (req, res) => {
   const { queryAll } = getDb();
   const rows = queryAll(`
     SELECT
@@ -389,7 +499,7 @@ app.get('/api/inscripciones', authMiddleware, (req, res) => {
   res.json(rows);
 });
 
-app.get('/api/inscripciones/:id', authMiddleware, (req, res) => {
+app.get('/api/inscripciones/:id', authMiddleware, requireSeccion('fichas', 'dashboard'), (req, res) => {
   const full = getFullInscripcionById(req.params.id);
   if (!full) return res.status(404).json({ error: 'Ficha médica no encontrada' });
   res.json(full);
@@ -561,7 +671,7 @@ app.post('/api/inscripciones', inscripcionLimiter, (req, res) => {
   res.status(201).json(creada);
 });
 
-app.put('/api/inscripciones/:id', authMiddleware, escribeFichas, (req, res) => {
+app.put('/api/inscripciones/:id', authMiddleware, requirePermiso('editar_fichas', 'No tenés permiso para editar fichas.'), (req, res) => {
   const { id } = req.params;
   const { colonia_id, autorizado, firma_padre_texto, firma_profesional_texto, padre = {}, nino = {}, medica = {} } = req.body;
   const { runQuery } = getDb();
@@ -696,7 +806,7 @@ app.put('/api/inscripciones/:id', authMiddleware, escribeFichas, (req, res) => {
   res.json(updated);
 });
 
-app.delete('/api/inscripciones/:id', authMiddleware, requireRole('admin'), (req, res) => {
+app.delete('/api/inscripciones/:id', authMiddleware, requirePermiso('eliminar_fichas', 'No tenés permiso para eliminar fichas.'), (req, res) => {
   const { id } = req.params;
   const { runQuery, transaction } = getDb();
   try {
@@ -871,7 +981,7 @@ app.get('/api/comunidad', (req, res) => {
   res.json({ link: linkComunidad() });
 });
 
-app.put('/api/comunidad', authMiddleware, requireRole('admin'), (req, res) => {
+app.put('/api/comunidad', authMiddleware, requireSeccion('clima'), (req, res) => {
   const link = String(req.body.link || '').trim();
   if (link && !LINK_COMUNIDAD_RE.test(link)) {
     return res.status(400).json({
@@ -894,7 +1004,7 @@ app.get('/api/alertas', (req, res) => {
 });
 
 // Cuántas familias recibirían un aviso, para mostrarlo antes de enviar
-app.get('/api/alertas/destinatarios', authMiddleware, requireRole('admin'), (req, res) => {
+app.get('/api/alertas/destinatarios', authMiddleware, requireSeccion('clima'), (req, res) => {
   const ids = parsearAlcance(req.query.colonia_ids ?? req.query.colonia_id);
   if (ids && ids.length === 0) return res.status(400).json({ error: 'Elegí al menos una localidad.' });
   const familias = familiasDe(ids);
@@ -906,7 +1016,7 @@ app.get('/api/alertas/destinatarios', authMiddleware, requireRole('admin'), (req
 });
 
 // Lista de WhatsApp de un aviso ya publicado (para retomarla después de recargar)
-app.get('/api/alertas/:id/whatsapp', authMiddleware, requireRole('admin'), (req, res) => {
+app.get('/api/alertas/:id/whatsapp', authMiddleware, requireSeccion('clima'), (req, res) => {
   const alerta = getDb().queryOne('SELECT * FROM alertas WHERE id = ?', [req.params.id]);
   if (!alerta) return res.status(404).json({ error: 'No encontramos ese aviso.' });
   const ids = alcanceIds(alerta);
@@ -918,7 +1028,7 @@ app.get('/api/alertas/:id/whatsapp', authMiddleware, requireRole('admin'), (req,
   });
 });
 
-app.post('/api/alertas', authMiddleware, requireRole('admin'), async (req, res) => {
+app.post('/api/alertas', authMiddleware, requireSeccion('clima'), async (req, res) => {
   const { colonia_ids, colonia_id, titulo, mensaje, suspender_colonia, enviar_email, duracion } = req.body;
   const { queryOne, runQuery, saveDatabase } = getDb();
 
@@ -989,7 +1099,7 @@ app.post('/api/alertas', authMiddleware, requireRole('admin'), async (req, res) 
   });
 });
 
-app.put('/api/alertas/:id/desactivar', authMiddleware, requireRole('admin'), (req, res) => {
+app.put('/api/alertas/:id/desactivar', authMiddleware, requireSeccion('clima'), (req, res) => {
   const { queryOne, runQuery, transaction } = getDb();
   const alerta = queryOne('SELECT * FROM alertas WHERE id = ?', [req.params.id]);
   if (!alerta) return res.status(404).json({ error: 'No encontramos ese aviso. Recargá la página.' });
@@ -1005,7 +1115,7 @@ app.put('/api/alertas/:id/desactivar', authMiddleware, requireRole('admin'), (re
 
 // ==================== ESTADISTICAS DASHBOARD ====================
 
-app.get('/api/estadisticas', authMiddleware, (req, res) => {
+app.get('/api/estadisticas', authMiddleware, requireSeccion('dashboard'), (req, res) => {
   const { queryOne, queryAll } = getDb();
 
   const totalInscriptos = queryOne("SELECT COUNT(*) as total FROM inscripciones WHERE estado = 'activo'")?.total || 0;
@@ -1097,7 +1207,7 @@ function enrichImagenRow(row) {
   };
 }
 
-app.post('/api/galeria/firma', authMiddleware, (req, res) => {
+app.post('/api/galeria/firma', authMiddleware, requireSeccion('galeria'), (req, res) => {
   if (isReadOnlyRole(req.user)) {
     return res.status(403).json({ error: 'Tu rol no tiene permisos para subir imágenes' });
   }
@@ -1128,7 +1238,7 @@ app.post('/api/galeria/firma', authMiddleware, (req, res) => {
 
 // --- CRUD de Álbumes (registrado ANTES de /api/galeria/:id) ---
 
-app.get('/api/galeria/albumes', authMiddleware, (req, res) => {
+app.get('/api/galeria/albumes', authMiddleware, requireSeccion('galeria'), (req, res) => {
   if (!checkGaleriaConfigured(res)) return;
 
   const { queryAll } = getDb();
@@ -1157,7 +1267,7 @@ app.get('/api/galeria/albumes', authMiddleware, (req, res) => {
   res.json(albumes);
 });
 
-app.post('/api/galeria/albumes', authMiddleware, (req, res) => {
+app.post('/api/galeria/albumes', authMiddleware, requireSeccion('galeria'), (req, res) => {
   if (isReadOnlyRole(req.user)) {
     return res.status(403).json({ error: 'Tu rol no tiene permisos para crear álbumes' });
   }
@@ -1199,7 +1309,7 @@ app.post('/api/galeria/albumes', authMiddleware, (req, res) => {
   res.status(201).json(nuevo);
 });
 
-app.put('/api/galeria/albumes/:id', authMiddleware, (req, res) => {
+app.put('/api/galeria/albumes/:id', authMiddleware, requireSeccion('galeria'), (req, res) => {
   if (!checkGaleriaConfigured(res)) return;
 
   const albumId = parseOptionalInt(req.params.id);
@@ -1247,7 +1357,7 @@ app.put('/api/galeria/albumes/:id', authMiddleware, (req, res) => {
   res.json(actualizado);
 });
 
-app.delete('/api/galeria/albumes/:id', authMiddleware, (req, res) => {
+app.delete('/api/galeria/albumes/:id', authMiddleware, requireSeccion('galeria'), (req, res) => {
   if (!checkGaleriaConfigured(res)) return;
 
   const albumId = parseOptionalInt(req.params.id);
@@ -1274,7 +1384,7 @@ app.delete('/api/galeria/albumes/:id', authMiddleware, (req, res) => {
 
 // --- Imágenes del Banco de Imágenes ---
 
-app.post('/api/galeria', authMiddleware, async (req, res) => {
+app.post('/api/galeria', authMiddleware, requireSeccion('galeria'), async (req, res) => {
   if (isReadOnlyRole(req.user)) {
     return res.status(403).json({ error: 'Tu rol no tiene permisos para registrar imágenes' });
   }
@@ -1369,7 +1479,7 @@ app.post('/api/galeria', authMiddleware, async (req, res) => {
   res.status(201).json(enrichImagenRow(creada));
 });
 
-app.get('/api/galeria', authMiddleware, (req, res) => {
+app.get('/api/galeria', authMiddleware, requireSeccion('galeria'), (req, res) => {
   if (!checkGaleriaConfigured(res)) return;
 
   const { queryAll, queryOne } = getDb();
@@ -1431,7 +1541,7 @@ app.get('/api/galeria', authMiddleware, (req, res) => {
   });
 });
 
-app.put('/api/galeria/:id', authMiddleware, (req, res) => {
+app.put('/api/galeria/:id', authMiddleware, requireSeccion('galeria'), (req, res) => {
   if (!checkGaleriaConfigured(res)) return;
 
   const imgId = parseOptionalInt(req.params.id);
@@ -1479,7 +1589,7 @@ app.put('/api/galeria/:id', authMiddleware, (req, res) => {
   res.json(enrichImagenRow(actualizada));
 });
 
-app.delete('/api/galeria/:id', authMiddleware, async (req, res) => {
+app.delete('/api/galeria/:id', authMiddleware, requireSeccion('galeria'), async (req, res) => {
   if (!checkGaleriaConfigured(res)) return;
 
   const imgId = parseOptionalInt(req.params.id);

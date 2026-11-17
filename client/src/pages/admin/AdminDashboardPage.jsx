@@ -19,7 +19,8 @@ import {
   X,
   AlertCircle,
   SearchX,
-  DatabaseBackup
+  DatabaseBackup,
+  Users
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import AlertaClimaticaBanner from '../../components/ui/AlertaClimaticaBanner';
@@ -28,6 +29,8 @@ import EstadisticasPanel from '../../components/stats/EstadisticasPanel';
 import GaleriaPanel from '../../components/galeria/GaleriaPanel';
 import AvisosClimaPanel from '../../components/clima/AvisosClimaPanel';
 import BackupsPanel from '../../components/backups/BackupsPanel';
+import UsuariosPanel from '../../components/usuarios/UsuariosPanel';
+import Hoja from '../../components/ui/Hoja';
 import { API_BASE, asset } from '../../config';
 
 const PATOLOGIAS_KEYS = [
@@ -94,19 +97,16 @@ export default function AdminDashboardPage() {
   const cargarTodo = async () => {
     setLoading(true);
     try {
+      // Las fichas solo se piden si el usuario ve Fichas o Estadísticas (el servidor igual lo controla)
+      const veFichas =
+        user?.rol === 'admin' || (user?.permisos?.secciones || []).some((s) => s === 'fichas' || s === 'dashboard');
       const [resIns, resCol, resAle] = await Promise.all([
-        authFetch(`${API_BASE}/inscripciones`),
+        veFichas ? authFetch(`${API_BASE}/inscripciones`) : null,
         authFetch(`${API_BASE}/colonias`),
         authFetch(`${API_BASE}/alertas`)
       ]);
 
-      if (resIns.status === 401) {
-        logout();
-        navigate('/login');
-        return;
-      }
-
-      const [dataIns, dataCol, dataAle] = await Promise.all([resIns.json(), resCol.json(), resAle.json()]);
+      const [dataIns, dataCol, dataAle] = await Promise.all([resIns ? resIns.json() : [], resCol.json(), resAle.json()]);
 
       if (Array.isArray(dataIns)) setInscripciones(dataIns);
       if (Array.isArray(dataCol)) setColonias(dataCol);
@@ -234,21 +234,31 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const puedeVerBackups = user?.rol === 'admin' && !isMobileView;
+  const esAdmin = user?.rol === 'admin';
+  const permisos = esAdmin
+    ? { secciones: ['fichas', 'dashboard', 'clima', 'galeria'], editar_fichas: true, eliminar_fichas: true }
+    : user?.permisos || { secciones: ['fichas'], editar_fichas: false, eliminar_fichas: false };
+  const puedeVerBackups = esAdmin && !isMobileView;
 
   const navItems = [
     { id: 'fichas', label: 'Fichas médicas', shortLabel: 'Fichas', icon: HeartPulse },
     { id: 'dashboard', label: 'Estadísticas', shortLabel: 'Estadísticas', icon: BarChart3 },
     { id: 'clima', label: 'Avisos por clima', shortLabel: 'Avisos', icon: CloudLightning },
-    { id: 'galeria', label: 'Banco de imágenes', shortLabel: 'Imágenes', icon: Images },
-    // Backups: solo admin y solo en PC (en el celular no se ofrece)
-    ...(puedeVerBackups ? [{ id: 'backups', label: 'Backups', shortLabel: 'Backups', icon: DatabaseBackup }] : [])
-  ];
+    { id: 'galeria', label: 'Banco de imágenes', shortLabel: 'Imágenes', icon: Images }
+  ]
+    .filter((item) => permisos.secciones?.includes(item.id))
+    .concat(
+      // Backups: solo admin y solo en PC. Usuarios: solo admin.
+      puedeVerBackups ? [{ id: 'backups', label: 'Backups', shortLabel: 'Backups', icon: DatabaseBackup }] : [],
+      esAdmin ? [{ id: 'usuarios', label: 'Usuarios', shortLabel: 'Usuarios', icon: Users }] : []
+    );
+  const tabsPermitidas = navItems.map((n) => n.id).join(',');
 
-  // Si se achica la ventana a tamaño celular estando en Backups, volver a Fichas
+  // Si la pestaña actual deja de estar permitida (cambio de permisos o ventana de celular), ir a la primera permitida
   useEffect(() => {
-    if (activeTab === 'backups' && !puedeVerBackups) setActiveTab('fichas');
-  }, [activeTab, puedeVerBackups]);
+    const ids = tabsPermitidas.split(',').filter(Boolean);
+    if (ids.length && !ids.includes(activeTab)) setActiveTab(ids[0]);
+  }, [activeTab, tabsPermitidas]);
 
   const cambiarTab = (id) => {
     setFichaSeleccionada(null);
@@ -335,7 +345,7 @@ export default function AdminDashboardPage() {
                 >
                   {user?.nombre}
                 </div>
-                <span className="role-badge">{user?.rol}</span>
+                <span className="role-badge">{esAdmin ? 'Administrador' : 'Usuario'}</span>
               </div>
             </div>
             <button
@@ -436,7 +446,7 @@ export default function AdminDashboardPage() {
           ) : (
             <>
               {/* ==================== FICHAS ==================== */}
-              {activeTab === 'fichas' && (
+              {activeTab === 'fichas' && permisos.secciones?.includes('fichas') && (
                 <motion.div key="fichas" {...tabMotion}>
                   <section className="hero-banner" aria-label="Buscar fichas">
                     <div
@@ -650,22 +660,26 @@ export default function AdminDashboardPage() {
                                       >
                                         <FileText size={18} /> Ver ficha completa
                                       </button>
-                                      <button
-                                        onClick={() => setEditModalFicha({ ...item })}
-                                        className="tool-btn"
-                                        style={{ width: 48, height: 48 }}
-                                        aria-label="Editar control de salud"
-                                      >
-                                        <Edit3 size={18} />
-                                      </button>
-                                      <button
-                                        onClick={() => handleEliminarFicha(item.id, item.nino_nombre)}
-                                        className="tool-btn danger"
-                                        style={{ width: 48, height: 48 }}
-                                        aria-label="Eliminar ficha"
-                                      >
-                                        <Trash2 size={18} />
-                                      </button>
+                                      {permisos.editar_fichas && (
+                                        <button
+                                          onClick={() => setEditModalFicha({ ...item })}
+                                          className="tool-btn"
+                                          style={{ width: 48, height: 48 }}
+                                          aria-label="Editar control de salud"
+                                        >
+                                          <Edit3 size={18} />
+                                        </button>
+                                      )}
+                                      {permisos.eliminar_fichas && (
+                                        <button
+                                          onClick={() => handleEliminarFicha(item.id, item.nino_nombre)}
+                                          className="tool-btn danger"
+                                          style={{ width: 48, height: 48 }}
+                                          aria-label="Eliminar ficha"
+                                        >
+                                          <Trash2 size={18} />
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 </motion.div>
@@ -764,22 +778,26 @@ export default function AdminDashboardPage() {
                               >
                                 <FileText size={18} />
                               </button>
-                              <button
-                                onClick={() => setEditModalFicha({ ...item })}
-                                className="tool-btn"
-                                title="Editar control de salud"
-                                aria-label="Editar control de salud"
-                              >
-                                <Edit3 size={18} />
-                              </button>
-                              <button
-                                onClick={() => handleEliminarFicha(item.id, item.nino_nombre)}
-                                className="tool-btn danger"
-                                title="Eliminar ficha"
-                                aria-label="Eliminar ficha"
-                              >
-                                <Trash2 size={18} />
-                              </button>
+                              {permisos.editar_fichas && (
+                                <button
+                                  onClick={() => setEditModalFicha({ ...item })}
+                                  className="tool-btn"
+                                  title="Editar control de salud"
+                                  aria-label="Editar control de salud"
+                                >
+                                  <Edit3 size={18} />
+                                </button>
+                              )}
+                              {permisos.eliminar_fichas && (
+                                <button
+                                  onClick={() => handleEliminarFicha(item.id, item.nino_nombre)}
+                                  className="tool-btn danger"
+                                  title="Eliminar ficha"
+                                  aria-label="Eliminar ficha"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              )}
                             </span>
                           </motion.div>
                         );
@@ -790,7 +808,7 @@ export default function AdminDashboardPage() {
               )}
 
               {/* ==================== ESTADÍSTICAS ==================== */}
-              {activeTab === 'dashboard' && (
+              {activeTab === 'dashboard' && permisos.secciones?.includes('dashboard') && (
                 <motion.div key="dashboard" {...tabMotion}>
                   {loading && inscripciones.length === 0 ? (
                     <div style={{ display: 'grid', gap: 12 }}>
@@ -819,7 +837,7 @@ export default function AdminDashboardPage() {
               )}
 
               {/* ==================== AVISOS POR CLIMA ==================== */}
-              {activeTab === 'clima' && (
+              {activeTab === 'clima' && permisos.secciones?.includes('clima') && (
                 <motion.div key="clima" {...tabMotion}>
                   <AvisosClimaPanel
                     colonias={colonias}
@@ -853,8 +871,20 @@ export default function AdminDashboardPage() {
                 </motion.div>
               )}
 
+              {/* ==================== USUARIOS ==================== */}
+              {activeTab === 'usuarios' && esAdmin && (
+                <motion.div key="usuarios" {...tabMotion}>
+                  <UsuariosPanel
+                    authFetch={authFetch}
+                    user={user}
+                    isMobileView={isMobileView}
+                    onUnauthorized={() => navigate('/login')}
+                  />
+                </motion.div>
+              )}
+
               {/* ==================== BANCO DE IMÁGENES ==================== */}
-              {activeTab === 'galeria' && (
+              {activeTab === 'galeria' && permisos.secciones?.includes('galeria') && (
                 <motion.div key="galeria" {...tabMotion}>
                   <GaleriaPanel colonias={colonias} isMobileView={isMobileView} />
                 </motion.div>
@@ -984,47 +1014,5 @@ export default function AdminDashboardPage() {
         )}
       </Hoja>
     </div>
-  );
-}
-
-/** Modal en PC, hoja inferior en celular. Cierra con Escape o tocando afuera. */
-function Hoja({ open, onClose, isMobile, maxWidth = 520, children }) {
-  const reduceMotion = useReducedMotion();
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  const panel = isMobile
-    ? { initial: { y: '100%' }, animate: { y: 0 }, exit: { y: '100%' }, transition: { duration: reduceMotion ? 0 : 0.4, ease: [0.32, 0.72, 0, 1] } }
-    : { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.97 }, transition: { duration: reduceMotion ? 0 : 0.2, ease: [0.23, 1, 0.32, 1] } };
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          className="sheet-backdrop"
-          onClick={onClose}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <motion.div
-            className="sheet-panel"
-            role="dialog"
-            aria-modal="true"
-            style={{ maxWidth }}
-            onClick={(e) => e.stopPropagation()}
-            {...panel}
-          >
-            <div className="sheet-handle" />
-            {children}
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
   );
 }

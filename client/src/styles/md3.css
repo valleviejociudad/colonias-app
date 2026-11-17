@@ -1813,3 +1813,40 @@ md-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 900px) {
   .backup-card > .md3-btn, .backup-actions .md3-btn { width: 100%; justify-content: center; }
 }
+
+/* ==========================================================================
+ * Usuarios del panel
+ * ========================================================================== */
+.usuarios { display: grid; gap: 16px; }
+.usuarios-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
+.usuarios-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.usuario-row {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface); border-radius: var(--r-md); box-shadow: var(--shadow-1);
+  padding: 14px 16px;
+}
+.usuario-avatar {
+  width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center; background: var(--pool-wash); color: var(--pool-ink);
+  font: 800 0.95rem var(--font-display);
+}
+.usuario-info { flex: 1; min-width: 0; }
+.usuario-nombre { font-weight: 700; font-size: 1.02rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.usuario-yo { font: 700 0.72rem var(--font-display); padding: 1px 8px; border-radius: 99px; background: var(--surface-2); color: var(--ink-2); }
+.usuario-email { color: var(--ink-2); font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usuario-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.usuario-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.82rem; font-weight: 600; padding: 2px 10px; border-radius: 99px;
+  background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line);
+}
+.usuario-chip.is-admin { background: var(--pool-wash); color: var(--pool-ink); border-color: transparent; }
+.usuario-acciones { display: flex; gap: 6px; flex-shrink: 0; }
+.usuario-acciones .tool-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.usuario-pass { display: flex; gap: 8px; align-items: center; }
+.usuario-pass .md3-input { flex: 1; }
+.gf-option.is-disabled { opacity: 0.45; cursor: not-allowed; }
+@media (max-width: 900px) {
+  .usuario-row { align-items: flex-start; padding: 12px; }
+  .usuarios-banner .md3-btn { width: 100%; justify-content: center; }
+}

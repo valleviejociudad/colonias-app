@@ -324,6 +324,21 @@ async function initDatabase() {
     }
   }
 
+  // Migración: permisos por usuario (secciones visibles + editar/eliminar fichas).
+  // Los admin tienen todo siempre; para el resto se guarda un JSON.
+  const colsUsuarios = queryAll('PRAGMA table_info(usuarios)').map((c) => c.name);
+  if (!colsUsuarios.includes('permisos')) {
+    dbInstance.run('ALTER TABLE usuarios ADD COLUMN permisos TEXT');
+  }
+  for (const u of queryAll("SELECT id, rol FROM usuarios WHERE rol != 'admin' AND (permisos IS NULL OR permisos = '')")) {
+    const soloLectura = String(u.rol).toLowerCase() === 'lectura';
+    const permisos = soloLectura
+      ? { secciones: ['fichas', 'dashboard'], editar_fichas: false, eliminar_fichas: false }
+      : { secciones: ['fichas', 'dashboard', 'clima', 'galeria'], editar_fichas: true, eliminar_fichas: false };
+    dbInstance.run("UPDATE usuarios SET rol = 'coordinador', permisos = ? WHERE id = ?", [JSON.stringify(permisos), u.id]);
+  }
+  saveDatabase();
+
   // Seed default colonias if empty
   const coloniaCount = queryOne('SELECT COUNT(*) as count FROM colonias');
   if (!coloniaCount || coloniaCount.count === 0) {

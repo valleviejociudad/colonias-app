@@ -67,20 +67,37 @@ export function AuthProvider({ children }) {
     return res;
   }, [token]);
 
-  // Validar token al arrancar la app (evita sesiones colgadas)
+  // Validar token y traer los permisos actualizados al arrancar y al volver a la pestaña
+  // (si un admin cambió los permisos de este usuario, se aplican sin cerrar sesión)
   useEffect(() => {
-    if (!token) return;
-    fetch(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store'
-    }).then(r => {
-      if (r.status === 401) {
-        setToken(null);
-        setUser(null);
-      }
-    }).catch(() => { /* red caída: no cerrar sesión */ });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!token) return undefined;
+    const refrescar = () => {
+      fetch(`${API_BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
+      })
+        .then(async (r) => {
+          if (r.status === 401) {
+            setToken(null);
+            setUser(null);
+            return;
+          }
+          if (r.ok) {
+            const data = await r.json();
+            if (data?.user) setUser(data.user);
+          }
+        })
+        .catch(() => { /* red caída: no cerrar sesión */ });
+    };
+    refrescar();
+    const alVolver = () => document.visibilityState === 'visible' && refrescar();
+    window.addEventListener('focus', alVolver);
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      window.removeEventListener('focus', alVolver);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+  }, [token]);
 
   return (
     <AuthContext.Provider value={{ user, token, login, logout, authFetch }}>
