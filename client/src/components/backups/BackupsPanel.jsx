@@ -75,7 +75,7 @@ export default function BackupsPanel({ inscripciones, colonias, laneColor, authF
     cancelarZip.current = false;
     setZip({ hechas: 0, total: seleccion.length });
     try {
-      // Se carga recién al usarlo: html2canvas + jsPDF + JSZip son pesados
+      // Se carga recién al usarlo: html-to-image + jsPDF + JSZip son pesados
       const { generarZipFichas } = await import('../ficha/generarZipFichas');
       const blob = await generarZipFichas(seleccion, {
         onProgreso: (hechas, total) => setZip({ hechas, total }),
@@ -193,8 +193,8 @@ export default function BackupsPanel({ inscripciones, colonias, laneColor, authF
           <h3>Fichas en PDF</h3>
           <p className="stats-note">
             Un ZIP con un PDF por ficha, igual a la planilla oficial.
-            {localidad === 'todas' && colonias.length > 1 ? ' Cada colonia va en su carpeta.' : ''} Tarda alrededor de un
-            segundo por ficha; no cierres esta pantalla mientras se genera.
+            {localidad === 'todas' && colonias.length > 1 ? ' Cada colonia va en su carpeta.' : ''} Tarda 1 a 2 segundos
+            por ficha; no cierres esta pantalla mientras se genera.
           </p>
 
           {zip ? (

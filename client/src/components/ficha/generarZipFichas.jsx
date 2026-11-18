@@ -1,20 +1,6 @@
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import { flushSync } from 'react-dom';
 import JSZip from 'jszip';
-import FichaMedicaVerticalView from './FichaMedicaVerticalView';
-import { pdfHorizontalDesdeElemento, nombreArchivoFicha } from '../../utils/pdfFicha';
-
-const esperarImagenes = (el) =>
-  Promise.all(
-    Array.from(el.querySelectorAll('img')).map((img) =>
-      img.complete && img.naturalWidth > 0
-        ? null
-        : new Promise((r) => {
-            img.onload = img.onerror = r;
-          })
-    )
-  );
+import { crearMesaDeTrabajo } from './generarPdfFicha';
+import { capturarHoja, pdfDesdeCanvas, nombreArchivoFicha } from '../../utils/pdfFicha';
 
 const carpeta = (t) =>
   String(t || 'Sin colonia')
@@ -32,24 +18,18 @@ export async function generarZipFichas(fichas, { onProgreso, debeCancelar } = {}
   const zip = new JSZip();
   const variasColonias = new Set(fichas.map((f) => f.colonia_id)).size > 1;
   const usados = new Set();
-
-  // Contenedor fuera de pantalla con ancho de PC para que la planilla salga siempre horizontal
-  const host = document.createElement('div');
-  host.setAttribute('aria-hidden', 'true');
-  Object.assign(host.style, { position: 'fixed', left: '-20000px', top: '0', width: '1200px', background: '#fff', pointerEvents: 'none' });
-  document.body.appendChild(host);
-  const root = createRoot(host);
+  // Una sola mesa de trabajo para todas: la planilla sale siempre horizontal
+  const mesa = crearMesaDeTrabajo('horizontal');
 
   try {
     for (let i = 0; i < fichas.length; i++) {
       if (debeCancelar?.()) return null;
       const f = fichas[i];
 
-      flushSync(() => root.render(<FichaMedicaVerticalView ficha={f} soloPlanilla layout="horizontal" />));
-      const hoja = host.querySelector('.ficha-oficial-sheet');
-      await esperarImagenes(hoja);
-
-      const pdf = await pdfHorizontalDesdeElemento(hoja, { escala: 1.4, calidad: 0.75 });
+      const hoja = mesa.dibujar(f);
+      // eslint-disable-next-line no-await-in-loop
+      const canvas = await capturarHoja(hoja, { escala: 1.4, dosPasadas: i === 0 });
+      const pdf = pdfDesdeCanvas(canvas, { calidad: 0.75 });
 
       let nombre = nombreArchivoFicha({ apellido_nombre: f.nino_nombre, dni: f.nino_dni });
       if (variasColonias) nombre = `${carpeta(f.colonia_nombre)}/${nombre}`;
@@ -60,11 +40,11 @@ export async function generarZipFichas(fichas, { onProgreso, debeCancelar } = {}
       zip.file(unico, pdf.output('arraybuffer'));
       onProgreso?.(i + 1, fichas.length);
       // Ceder el hilo para que la barra de progreso se actualice
+      // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, 0));
     }
   } finally {
-    root.unmount();
-    host.remove();
+    mesa.cerrar();
   }
 
   // Los PDF ya vienen comprimidos: STORE es mucho más rápido y pesa casi lo mismo

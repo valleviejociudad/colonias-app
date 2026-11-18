@@ -1,8 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Phone, MessageCircle, Printer, Download, ArrowLeft } from 'lucide-react';
-import { jsPDF } from 'jspdf';
 import HeaderValleViejo from '../ui/HeaderValleViejo';
-import { pdfHorizontalDesdeElemento, capturarFicha } from '../../utils/pdfFicha';
+import { nombreArchivoFicha } from '../../utils/pdfFicha';
 import { asset } from '../../config';
 
 const PATOLOGIAS_LIST = [
@@ -85,92 +84,16 @@ export default function FichaMedicaVerticalView({ ficha, onBack, showBackButton 
   const telUrgencia = urgenciaDigits.length >= 7 ? urgenciaDigits : cleanPhone;
 
   // ──────────────────────────────────────────────────────────────
-  // PDF: Portrait en mobile (ancho A4 completo sin achicar márgenes)
-  //      Landscape en desktop (una página, fit proporcional sin cambios)
+  // PDF: una sola hoja A4, igual a la planilla que se ve en pantalla.
+  //      Vertical en celular, horizontal en PC. Ver utils/pdfFicha.js.
   // ──────────────────────────────────────────────────────────────
   const handleDownloadPdf = async () => {
-    if (!sheetRef.current) return;
     setGeneratingPdf(true);
     try {
-      const element = sheetRef.current;
-
-      if (isMobile) {
-        // Guardamos las proporciones reales de las imágenes del DOM vivo para asegurar que html2canvas las pinte
-        const liveImgs = Array.from(element.querySelectorAll('img'));
-        const imgDimensions = liveImgs.map((img) => ({
-          naturalWidth: img.naturalWidth,
-          naturalHeight: img.naturalHeight,
-          renderedHeight: parseFloat(img.style.height) || img.offsetHeight
-        }));
-
-        // Renderizamos el clon a proporción exacta de hoja A4 Vertical (800px de ancho)
-        // eliminando cualquier max-width o padding de contenedores móviles que antes la angostaban
-        const canvas = await capturarFicha(element, {
-          scale: 2,
-          windowWidth: 840,
-          alClonar: (clonedDoc, clonedEl) => {
-            let parent = clonedEl.parentElement;
-            while (parent && parent !== clonedDoc.documentElement) {
-              parent.style.maxWidth = 'none';
-              parent.style.width = 'auto';
-              parent.style.padding = '0';
-              parent.style.margin = '0';
-              parent.style.overflow = 'visible';
-              parent = parent.parentElement;
-            }
-
-            clonedEl.style.width = '800px';
-            clonedEl.style.minWidth = '800px';
-            clonedEl.style.maxWidth = '800px';
-            clonedEl.style.margin = '0';
-            clonedEl.style.padding = '14px 18px';
-            clonedEl.style.gap = '8px';
-            clonedEl.style.boxShadow = 'none';
-            clonedEl.style.borderRadius = '8px';
-
-            // Compacta levemente las celdas de patologías para que entre cómoda a ancho completo en 1 A4 vertical
-            clonedEl.querySelectorAll('.ficha-patologia-table td').forEach((td) => {
-              td.style.padding = '3px 8px';
-            });
-
-            // Fija dimensiones explícitas en píxeles en los logos institucionales
-            const clonedImgs = Array.from(clonedEl.querySelectorAll('img'));
-            clonedImgs.forEach((cImg, i) => {
-              const info = imgDimensions[i];
-              if (info && info.naturalWidth > 0 && info.naturalHeight > 0 && info.renderedHeight > 0) {
-                const exactW = Math.round((info.naturalWidth / info.naturalHeight) * info.renderedHeight);
-                cImg.style.height = `${info.renderedHeight}px`;
-                cImg.style.width = `${exactW}px`;
-                cImg.style.objectFit = 'fill';
-              }
-            });
-          }
-        });
-
-        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true });
-        const pageWidth = pdf.internal.pageSize.getWidth();   // 210 mm
-        const pageHeight = pdf.internal.pageSize.getHeight(); // 297 mm
-        const margin = 4; // margen mínimo de impresión (4 mm)
-
-        const contentWidthMm = pageWidth - margin * 2;   // 202 mm (casi el 100% de la hoja)
-        const contentHeightMm = pageHeight - margin * 2; // 289 mm
-
-        const widthRatio = contentWidthMm / canvas.width;
-
-        // Siempre en una sola hoja: si la ficha es más larga que un A4 (observaciones muy extensas),
-        // se achica proporcionalmente en vez de partirla en dos páginas.
-        const fitRatio = Math.min(widthRatio, contentHeightMm / canvas.height);
-        const finalW = canvas.width * fitRatio;
-        const finalH = canvas.height * fitRatio;
-        const imgData = canvas.toDataURL('image/jpeg', 0.88);
-        pdf.addImage(imgData, 'JPEG', (pageWidth - finalW) / 2, (pageHeight - finalH) / 2, finalW, finalH, undefined, 'FAST');
-
-        pdf.save(`Ficha_Medica_${nino.apellido_nombre || 'Colonia'}_DNI_${nino.dni}.pdf`);
-      } else {
-        // ── LANDSCAPE: una sola página con fit proporcional ──
-        const pdf = await pdfHorizontalDesdeElemento(element);
-        pdf.save(`Ficha_Medica_${nino.apellido_nombre || 'Colonia'}_DNI_${nino.dni}.pdf`);
-      }
+      // Se carga recién al descargar (html-to-image y jsPDF son pesados)
+      const { generarPdfFicha } = await import('./generarPdfFicha');
+      const pdf = await generarPdfFicha(ficha, { layout: usarVertical ? 'vertical' : 'horizontal' });
+      pdf.save(nombreArchivoFicha(nino));
     } catch (err) {
       alert('No se pudo generar el PDF: ' + err.message);
     } finally {

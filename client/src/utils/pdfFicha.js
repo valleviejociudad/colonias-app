@@ -1,99 +1,111 @@
-import html2canvas from 'html2canvas';
+import { toCanvas } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Por qué se juntaban las palabras en el PDF:
-// html2canvas copia la página en un iframe oculto, mide ahí la posición de cada palabra
-// y después las dibuja con la fuente de la página. Si en ese iframe la fuente (Roboto, de
-// Google Fonts) todavía no había bajado, medía con la de reserva (Arial, más angosta) y
-// dibujaba con Roboto (más ancha): las palabras se pisaban y desaparecían los espacios.
-// `fonts.ready` no alcanza: se resuelve enseguida si el navegador todavía no empezó a bajarlas.
-// Solución: antes de medir, pedir explícitamente cada fuente que usa la hoja y esperarla,
-// tanto en la página como en la copia.
+// Cómo se arma el PDF de la ficha
+//
+// Antes se usaba html2canvas, que vuelve a calcular a mano dónde va cada palabra y la
+// dibuja en un canvas. En algunos Chrome ese cálculo no coincide con la fuente real y
+// el PDF salía con las palabras pegadas y sin ":", "," "." ni "-".
+//
+// Ahora la hoja la dibuja el propio navegador (html-to-image: la hoja se mete en un SVG
+// y el navegador la pinta con su motor normal), así que el PDF sale igual que la pantalla.
+// Para que use las mismas letras, las fuentes de Google se incrustan en el SVG.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function fuentesUsadas(raiz) {
-  const win = raiz.ownerDocument.defaultView;
-  const set = new Set();
-  for (const el of [raiz, ...raiz.querySelectorAll('*')]) {
-    const cs = win.getComputedStyle(el);
-    const familia = cs.fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
-    if (familia) set.add(`${cs.fontStyle === 'italic' ? 'italic ' : ''}${cs.fontWeight} 16px "${familia}"`);
-  }
-  return [...set];
-}
+let promesaFuentes = null;
 
-async function esperarHojasDeEstilo(doc) {
-  const links = [...doc.querySelectorAll('link[rel="stylesheet"]')];
-  await Promise.all(
-    links.map((l) => {
-      if (l.sheet) return null;
-      return new Promise((r) => {
-        l.addEventListener('load', r, { once: true });
-        l.addEventListener('error', r, { once: true });
-        setTimeout(r, 4000);
-      });
-    })
-  );
-}
-
-/** Espera a que estén cargadas todas las fuentes que usa `raiz` dentro de su documento. */
-export async function esperarFuentes(raiz) {
-  const doc = raiz.ownerDocument;
-  if (!doc.fonts) return;
-  await esperarHojasDeEstilo(doc);
-  const fuentes = fuentesUsadas(raiz);
-  await Promise.race([
-    Promise.all(fuentes.map((f) => doc.fonts.load(f).catch(() => null))),
-    new Promise((r) => setTimeout(r, 6000)) // sin red, no colgar la descarga
-  ]);
-  await doc.fonts.ready;
-  // Un instante para que el navegador vuelva a calcular el texto con la fuente ya cargada.
-  // (setTimeout y no requestAnimationFrame: este último se frena si la pestaña está en segundo plano)
-  await new Promise((r) => setTimeout(r, 30));
-}
-
-/**
- * html2canvas con las fuentes garantizadas en la página y en la copia interna.
- * `alClonar(docClon, elClon)` permite ajustar la copia (como el onclone de html2canvas).
- */
-export async function capturarFicha(element, { alClonar, ...opciones } = {}) {
-  await esperarFuentes(element);
-  return html2canvas(element, {
-    useCORS: true,
-    backgroundColor: '#ffffff',
-    logging: false,
-    ...opciones,
-    onclone: async (docClon, elClon) => {
-      // html2canvas no sabe dibujar "font-variant-numeric" (la app usa números de ancho fijo):
-      // mediría los números con un ancho y los dibujaría con otro, dejando huecos en fechas
-      // y presiones ("2014 -11 -05"). En la copia se usan números normales.
-      const estilo = docClon.createElement('style');
-      estilo.textContent = '* { font-variant-numeric: normal !important; font-feature-settings: normal !important; }';
-      docClon.head.appendChild(estilo);
-      if (alClonar) await alClonar(docClon, elClon);
-      await esperarFuentes(elClon);
-    }
+function aDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(blob);
   });
 }
 
-// Planilla horizontal (A4 apaisado, una sola página con ajuste proporcional).
-// La usan la descarga individual en PC y el ZIP con todas las fichas.
-export async function pdfHorizontalDesdeElemento(element, { escala = 2, calidad = 0.88 } = {}) {
-  const canvas = await capturarFicha(element, { scale: escala, windowWidth: 1200 });
+/**
+ * CSS con las fuentes de la app incrustadas (solo el juego "latin", que alcanza para el español:
+ * tildes, ñ, ¿, º). Se arma una sola vez y se reutiliza para todas las fichas.
+ * Si no se puede (sin internet), devuelve '' y el PDF sale con letras del sistema pero bien espaciado.
+ */
+async function cssFuentesIncrustadas() {
+  if (!promesaFuentes) {
+    promesaFuentes = (async () => {
+      const hrefs = [...document.querySelectorAll('link[rel="stylesheet"][href*="fonts.googleapis.com"]')]
+        .map((l) => l.href)
+        .filter((h) => !/Material/i.test(h)); // los íconos de Material no se usan en la ficha
+      const bloques = [];
+      for (const href of hrefs) {
+        // eslint-disable-next-line no-await-in-loop
+        const css = await (await fetch(href)).text();
+        for (const m of css.matchAll(/\/\*\s*([\w-]+)\s*\*\/\s*(@font-face\s*\{[^}]*\})/g)) {
+          if (m[1] === 'latin') bloques.push(m[2]);
+        }
+      }
+      const archivos = new Map(); // la misma fuente variable se repite para varios grosores
+      const conDatos = await Promise.all(
+        bloques.map(async (bloque) => {
+          const url = /url\(([^)]+)\)/.exec(bloque)?.[1]?.replace(/['"]/g, '');
+          if (!url) return '';
+          if (!archivos.has(url)) archivos.set(url, fetch(url).then((r) => r.blob()).then(aDataUrl));
+          return bloque.replace(url, await archivos.get(url));
+        })
+      );
+      return conDatos.join('\n');
+    })().catch((err) => {
+      console.warn('No se pudieron incrustar las fuentes en el PDF:', err);
+      promesaFuentes = null;
+      return '';
+    });
+  }
+  return promesaFuentes;
+}
 
-  const imgData = canvas.toDataURL('image/jpeg', calidad);
-  const pdf = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4', compress: true });
+async function esperarImagenes(raiz) {
+  await Promise.all(
+    [...raiz.querySelectorAll('img')].map((img) =>
+      img.complete && img.naturalWidth > 0
+        ? null
+        : new Promise((r) => {
+            img.addEventListener('load', r, { once: true });
+            img.addEventListener('error', r, { once: true });
+          })
+    )
+  );
+}
 
+/** Saca una "foto" fiel de la hoja con el motor del navegador. */
+export async function capturarHoja(hoja, { escala = 2, dosPasadas = true } = {}) {
+  await Promise.all([esperarImagenes(hoja), document.fonts?.ready]);
+  const fontEmbedCSS = await cssFuentesIncrustadas();
+  const opciones = {
+    pixelRatio: escala,
+    backgroundColor: '#ffffff',
+    cacheBust: false,
+    fontEmbedCSS,
+    width: hoja.offsetWidth,
+    height: hoja.offsetHeight,
+    style: { margin: '0', boxShadow: 'none' }
+  };
+  // La primera pasada a veces no termina de pintar las imágenes incrustadas (logos): se hace dos veces.
+  // En el ZIP alcanza con hacerlo en la primera ficha; después los logos ya están listos.
+  if (dosPasadas) await toCanvas(hoja, opciones);
+  return toCanvas(hoja, opciones);
+}
+
+/** Arma un PDF A4 de una sola hoja con la imagen centrada y achicada para que entre entera. */
+export function pdfDesdeCanvas(canvas, { vertical = false, calidad = 0.88 } = {}) {
+  const pdf = new jsPDF({ orientation: vertical ? 'p' : 'l', unit: 'mm', format: 'a4', compress: true });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const margin = 6;
+  const margin = vertical ? 4 : 6;
 
   const ratio = Math.min((pageWidth - margin * 2) / canvas.width, (pageHeight - margin * 2) / canvas.height);
-  const finalWidth = canvas.width * ratio;
-  const finalHeight = canvas.height * ratio;
+  const w = canvas.width * ratio;
+  const h = canvas.height * ratio;
+  pdf.addImage(canvas.toDataURL('image/jpeg', calidad), 'JPEG', (pageWidth - w) / 2, (pageHeight - h) / 2, w, h, undefined, 'FAST');
 
-  pdf.addImage(imgData, 'JPEG', (pageWidth - finalWidth) / 2, (pageHeight - finalHeight) / 2, finalWidth, finalHeight, undefined, 'FAST');
   // Liberar memoria del canvas enseguida (importante al generar cientos)
   canvas.width = 0;
   canvas.height = 0;
