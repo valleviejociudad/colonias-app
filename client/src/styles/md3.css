@@ -899,6 +899,16 @@ md-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
   box-shadow: 0 -4px 16px rgba(0, 40, 60, 0.08);
   justify-content: space-around;
 }
+/* iOS (app instalada): a veces el "bottom: 0" queda por encima del borde real de la pantalla y se
+   ve el fondo celeste debajo de la barra. Se rellena hacia abajo con el mismo blanco. */
+.app-bottom-nav::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  height: 200px;
+  background: #fff;
+  pointer-events: none;
+}
 .bottom-nav-item {
   flex: 1;
   display: flex;
@@ -1429,6 +1439,8 @@ md-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
     grid-template-areas: "encurso" "form" "comunidad" "historial";
     grid-template-rows: auto;
   }
+  /* Recién publicado: el "Aviso publicado" va arriba de los avisos en curso */
+  .clima-resultado { grid-template-areas: "form" "encurso" "comunidad" "historial"; }
   .confirm-list > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .confirm-actions { flex-direction: column-reverse; }
   .confirm-actions .md3-btn { width: 100%; }

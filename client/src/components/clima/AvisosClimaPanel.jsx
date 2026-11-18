@@ -151,85 +151,9 @@ function cuandoTermina(alerta) {
   return esHoy ? 'Se termina solo hoy a la noche.' : `Se termina solo el ${diaLargo(v)} a la noche.`;
 }
 
-/* ---------- Lista de WhatsApp: marca a quién ya se le mandó ---------- */
+/* ---------- Mandar el aviso por WhatsApp: a la Comunidad ---------- */
 
-function leerEnviados(alertaId) {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(`aviso-wa-${alertaId}`) || '[]'));
-  } catch {
-    return new Set();
-  }
-}
-
-function ListaWhatsApp({ alertaId, links }) {
-  const [enviados, setEnviados] = useState(() => leerEnviados(alertaId));
-
-  const marcar = (clave) => {
-    setEnviados((prev) => {
-      const next = new Set(prev);
-      next.add(clave);
-      try {
-        localStorage.setItem(`aviso-wa-${alertaId}`, JSON.stringify([...next]));
-      } catch {
-        /* sin almacenamiento: la marca dura mientras la página esté abierta */
-      }
-      return next;
-    });
-  };
-
-  const hechos = links.filter((l) => enviados.has(l.clave)).length;
-
-  if (links.length === 0) {
-    return <p className="wa-hint">Ninguna familia de esta localidad tiene un celular para WhatsApp.</p>;
-  }
-
-  return (
-    <div className="wa-block">
-      <p className="wa-hint">Para las familias que no están en la Comunidad. Quienes pidieron no recibir WhatsApp no aparecen.</p>
-      <p className="wa-progress" aria-live="polite">
-        <strong>
-          {hechos} de {plural(links.length, 'familia', 'familias')}
-        </strong>{' '}
-        {hechos === links.length ? 'avisadas. ¡Listo!' : 'avisadas'}
-      </p>
-      <ul className="wa-list">
-        {links.map((it) => {
-          const listo = enviados.has(it.clave);
-          return (
-            <li key={it.clave} className={`wa-row${listo ? ' is-sent' : ''}`}>
-              <div className="wa-who">
-                <strong>{it.padre_nombre}</strong>
-                <span>
-                  {it.nino_nombre ? `Por ${it.nino_nombre} · ` : ''}
-                  {it.telefono}
-                </span>
-                {listo && (
-                  <span className="wa-done">
-                    <Check size={16} aria-hidden="true" /> Enviado
-                  </span>
-                )}
-              </div>
-              <a
-                href={it.wa_link}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => marcar(it.clave)}
-                className={`md3-btn ${listo ? 'md3-btn-outlined' : 'md3-btn-success'}`}
-                aria-label={`${listo ? 'Volver a mandar' : 'Mandar'} WhatsApp a ${it.padre_nombre}`}
-              >
-                <MessageCircle size={18} aria-hidden="true" /> {listo ? 'Otra vez' : 'Enviar'}
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-/* ---------- Mandar el aviso por WhatsApp: primero a la Comunidad, después familia por familia ---------- */
-
-function DifusionWhatsApp({ alertaId, mensaje, links, comunidadLink, esAdmin }) {
+function DifusionWhatsApp({ mensaje, comunidadLink, esAdmin }) {
   const [copiado, setCopiado] = useState(false);
 
   const copiar = async () => {
@@ -270,14 +194,6 @@ function DifusionWhatsApp({ alertaId, mensaje, links, comunidadLink, esAdmin }) 
           {copiado ? 'Mensaje copiado' : ''}
         </span>
       </div>
-
-      <details className="wa-familias">
-        <summary>
-          <span>Mandar a cada familia por separado ({links.length})</span>
-          <ChevronDown size={20} aria-hidden="true" />
-        </summary>
-        <ListaWhatsApp alertaId={alertaId} links={links} />
-      </details>
     </>
   );
 }
@@ -608,7 +524,7 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
   };
 
   return (
-    <div className="clima">
+    <div className={`clima${paso === 'resultado' && resultado ? ' clima-resultado' : ''}`}>
       {/* ---------- En curso: lo primero que hay que saber ---------- */}
       <section className="clima-encurso" aria-labelledby="clima-encurso-h">
         <h2 id="clima-encurso-h" className="clima-h">

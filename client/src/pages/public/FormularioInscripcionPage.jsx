@@ -729,7 +729,7 @@ export default function FormularioInscripcionPage() {
                     field="acepta_whatsapp"
                     title="¿Querés recibir los avisos de la colonia por WhatsApp?"
                     required
-                    help="Por ejemplo, si se suspende por lluvia o calor. Los avisos también llegan por correo."
+                    help="Por ejemplo, si se suspende por lluvia o calor."
                     error={errores.acepta_whatsapp}
                   >
                     <div className="gf-options">
@@ -747,7 +747,7 @@ export default function FormularioInscripcionPage() {
                         checked={padre.acepta_whatsapp === false}
                         onChange={() => setPadre({ ...padre, acepta_whatsapp: false })}
                       >
-                        No, solo por correo
+                        No, no quiero recibirlos
                       </Opcion>
                     </div>
                   </Pregunta>
