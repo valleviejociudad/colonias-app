@@ -3,7 +3,6 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { API_BASE } from '../../config';
 import {
   AlertCircle,
-  ArrowLeft,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -12,7 +11,6 @@ import {
   CloudRain,
   Copy,
   Loader2,
-  Mail,
   MapPin,
   MapPinned,
   MessageCircle,
@@ -132,7 +130,6 @@ const FORM_INICIAL = {
   titulo: '',
   mensaje: '',
   suspender_colonia: true,
-  enviar_email: true,
   duracion: 'hoy'
 };
 
@@ -232,7 +229,7 @@ function ListaWhatsApp({ alertaId, links }) {
 
 /* ---------- Mandar el aviso por WhatsApp: primero a la Comunidad, después familia por familia ---------- */
 
-function DifusionWhatsApp({ alertaId, mensaje, links, comunidadLink }) {
+function DifusionWhatsApp({ alertaId, mensaje, links, comunidadLink, esAdmin }) {
   const [copiado, setCopiado] = useState(false);
 
   const copiar = async () => {
@@ -253,7 +250,7 @@ function DifusionWhatsApp({ alertaId, mensaje, links, comunidadLink }) {
         </p>
         <p>
           Se abre WhatsApp con el mensaje ya escrito. Elegí el grupo de avisos de la Comunidad y tocá enviar.
-          {!comunidadLink && ' Todavía no cargaste el link de la Comunidad para que las familias se unan.'}
+          {esAdmin && !comunidadLink && ' Todavía no cargaste el link de la Comunidad para que las familias se unan.'}
         </p>
         <div className="comunidad-send-actions">
           <a
@@ -407,77 +404,12 @@ function PlantillaOpcion({ p, elegida, onElegir }) {
   );
 }
 
-/* ---------- Estado del correo, en palabras simples ---------- */
-
-function EstadoCorreo({ r }) {
-  if (!r || r.modo === 'no_pedido') {
-    return (
-      <p className="aviso-line">
-        <Mail size={18} aria-hidden="true" /> No se mandó correo.
-      </p>
-    );
-  }
-  if (r.modo === 'sin_destinatarios') {
-    return (
-      <p className="aviso-line">
-        <Mail size={18} aria-hidden="true" /> No se mandó correo: ninguna familia tiene correo cargado.
-      </p>
-    );
-  }
-  if (r.modo === 'sin_configurar') {
-    return (
-      <div className="notice warn">
-        <AlertCircle size={20} />
-        <div>
-          <strong>No se mandaron los correos.</strong> El correo del sistema no está configurado: avisale a sistemas.
-          Mientras tanto, avisá por WhatsApp.
-          <details className="tech-details">
-            <summary>Detalle para sistemas</summary>
-            Faltan las variables SMTP_HOST, SMTP_USER y SMTP_PASS en el servidor.
-          </details>
-        </div>
-      </div>
-    );
-  }
-  const partes = [];
-  if (r.fallidos) partes.push(`${plural(r.fallidos, 'no se pudo mandar', 'no se pudieron mandar')}`);
-  if (r.sin_email) partes.push(`${plural(r.sin_email, 'familia no tiene', 'familias no tienen')} correo cargado`);
-  return (
-    <>
-      {r.modo === 'ethereal_test' && (
-        <div className="notice warn">
-          <AlertCircle size={20} />
-          <span>
-            <strong>Modo de prueba:</strong> los correos fueron a un buzón de prueba y no les llegaron a las familias.
-            {r.previewUrl && (
-              <>
-                {' '}
-                <a href={r.previewUrl} target="_blank" rel="noreferrer">
-                  Ver el correo de prueba
-                </a>
-              </>
-            )}
-          </span>
-        </div>
-      )}
-      <p className="aviso-line">
-        <Mail size={18} aria-hidden="true" />
-        <span>
-          Correo enviado a <strong>{plural(r.enviados, 'familia', 'familias')}</strong>
-          {partes.length ? `. ${partes.join(' y ')}.` : '.'}
-        </span>
-      </p>
-    </>
-  );
-}
-
 /* ---------- Panel ---------- */
 
-export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambio, onUnauthorized }) {
+export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambio, onUnauthorized, esAdmin = false }) {
   const reduceMotion = useReducedMotion();
   const [form, setForm] = useState(FORM_INICIAL);
-  const [paso, setPaso] = useState('form'); // form | confirmar | resultado
-  const [conteo, setConteo] = useState(null);
+  const [paso, setPaso] = useState('form'); // form | resultado
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState(null);
   const [resultado, setResultado] = useState(null);
@@ -525,12 +457,6 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
   const anteriores = useMemo(() => alertas.filter((a) => a.activa !== 1), [alertas]);
 
   const sonTodas = colonias.length > 0 && form.colonias.length === colonias.length;
-  const nombresElegidos = colonias.filter((c) => form.colonias.includes(String(c.id))).map((c) => c.nombre);
-  const alcance = sonTodas
-    ? 'todas las localidades'
-    : nombresElegidos.length > 1
-      ? `${nombresElegidos.slice(0, -1).join(', ')} y ${nombresElegidos[nombresElegidos.length - 1]}`
-      : nombresElegidos[0] || '';
 
   const alternarLocalidad = (id) => {
     setError(null);
@@ -573,7 +499,8 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
     }));
   };
 
-  const revisar = async (e) => {
+  // Se publica directo, sin paso de revisión
+  const enviar = async (e) => {
     e.preventDefault();
     if (form.colonias.length === 0) {
       setError('Elegí al menos una localidad.');
@@ -586,31 +513,13 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
     setError(null);
     setCargando(true);
     try {
-      const q = sonTodas ? '' : `?colonia_ids=${encodeURIComponent(form.colonias.join(','))}`;
-      const res = await authFetch(`${API_BASE}/alertas/destinatarios${q}`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || 'No pudimos contar las familias. Probá de nuevo.');
-        return;
-      }
-      setConteo(data);
-      setPaso('confirmar');
-    } catch (err) {
-      manejarError(err, 'No pudimos contar las familias. Revisá tu conexión.');
-    } finally {
-      setCargando(false);
-    }
-  };
-
-  const enviar = async () => {
-    setError(null);
-    setCargando(true);
-    try {
       const res = await authFetch(`${API_BASE}/alertas`, {
         method: 'POST',
         body: JSON.stringify({
-          ...form,
-          colonias: undefined,
+          titulo: form.titulo,
+          mensaje: form.mensaje,
+          suspender_colonia: form.suspender_colonia,
+          duracion: form.duracion,
           colonia_ids: sonTodas ? null : form.colonias.map(Number)
         })
       });
@@ -632,7 +541,6 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
   const nuevoAviso = () => {
     setForm(FORM_INICIAL);
     setResultado(null);
-    setConteo(null);
     setError(null);
     setPaso('form');
   };
@@ -771,6 +679,7 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
                     mensaje={lista.data.mensaje}
                     links={lista.data.whatsappLinks}
                     comunidadLink={comunidadLink}
+                    esAdmin={esAdmin}
                   />
                 )}
               </article>
@@ -779,11 +688,13 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
         )}
       </section>
 
-      <div className="clima-comunidad">
-        <ComunidadAjuste link={comunidadLink} onGuardar={guardarComunidad} />
-      </div>
+      {esAdmin && (
+        <div className="clima-comunidad">
+          <ComunidadAjuste link={comunidadLink} onGuardar={guardarComunidad} />
+        </div>
+      )}
 
-      {/* ---------- Escribir, revisar, enviar ---------- */}
+      {/* ---------- Escribir y enviar ---------- */}
       <section className="clima-form gf-card" ref={cardRef}>
         <AnimatePresence mode="wait" initial={false}>
           {paso === 'form' && (
@@ -791,12 +702,8 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
               <h2 className="clima-h with-icon" ref={tituloPasoRef} tabIndex={-1}>
                 <CloudLightning size={24} color="var(--warn)" aria-hidden="true" /> Avisar a las familias
               </h2>
-              <p className="clima-intro">
-                El aviso aparece en el formulario de inscripción. Además podés mandarlo por correo y por WhatsApp. Antes
-                de enviarlo vas a ver a cuántas familias les llega.
-              </p>
 
-              <form onSubmit={revisar}>
+              <form onSubmit={enviar}>
                 <fieldset className="clima-fieldset">
                   <legend className="md3-label">
                     ¿A qué localidades? <span className="md3-required">*</span>
@@ -951,20 +858,6 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
                         <span className="opt-sub">En el formulario, la localidad aparece como suspendida.</span>
                       </span>
                     </label>
-                    <label className="gf-option">
-                      <input
-                        type="checkbox"
-                        checked={form.enviar_email}
-                        onChange={(e) => setForm({ ...form, enviar_email: e.target.checked })}
-                      />
-                      <span className="box">
-                        <Check size={16} strokeWidth={3} />
-                      </span>
-                      <span className="opt-main">
-                        <span>Mandar correo a las familias</span>
-                        <span className="opt-sub">La lista de WhatsApp se arma siempre.</span>
-                      </span>
-                    </label>
                   </div>
                 </fieldset>
                 </>
@@ -974,80 +867,9 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
 
                 <button type="submit" className="md3-btn md3-btn-filled md3-btn-big clima-submit" disabled={cargando}>
                   {cargando ? <Loader2 size={20} className="spin" /> : <Send size={20} />}
-                  {cargando ? 'Contando familias…' : 'Revisar antes de enviar'}
+                  {cargando ? 'Publicando…' : 'Publicar y avisar'}
                 </button>
               </form>
-            </motion.div>
-          )}
-
-          {paso === 'confirmar' && conteo && (
-            <motion.div key="confirmar" {...pasoMotion}>
-              <h2 className="clima-h" ref={tituloPasoRef} tabIndex={-1}>
-                Revisá el aviso
-              </h2>
-              <p className="confirm-lead">
-                Vas a avisar a <strong>{plural(conteo.familias, 'familia', 'familias')}</strong> de{' '}
-                <strong>{alcance}</strong>.
-              </p>
-
-              {conteo.familias === 0 && (
-                <div className="notice warn">
-                  <AlertCircle size={20} />
-                  <span>Esta localidad no tiene familias inscriptas. El aviso igual se muestra en el formulario.</span>
-                </div>
-              )}
-
-              <dl className="confirm-list">
-                <div>
-                  <dt>En el formulario</dt>
-                  <dd>
-                    {form.duracion === 'hoy'
-                      ? `Se ve solo hoy, ${diaLargo(new Date())}.`
-                      : 'Se ve hasta que lo levantes.'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Actividades</dt>
-                  <dd>{form.suspender_colonia ? 'Quedan suspendidas.' : 'No se suspenden: es solo un aviso.'}</dd>
-                </div>
-                <div>
-                  <dt>Correo</dt>
-                  <dd>
-                    {!form.enviar_email
-                      ? 'No se manda.'
-                      : `Se manda a ${plural(conteo.con_email, 'familia', 'familias')}${
-                          conteo.familias - conteo.con_email > 0
-                            ? ` (${plural(conteo.familias - conteo.con_email, 'no tiene', 'no tienen')} correo cargado)`
-                            : ''
-                        }.`}
-                  </dd>
-                </div>
-                <div>
-                  <dt>WhatsApp</dt>
-                  <dd>
-                    Lo mandás a la Comunidad con un botón. Si hace falta, también tenés la lista de{' '}
-                    {plural(conteo.con_telefono, 'familia', 'familias')} para mandarlo una por una.
-                  </dd>
-                </div>
-              </dl>
-
-              <div className="aviso-preview">
-                <p className="aviso-preview-k">Así lo van a ver</p>
-                <p className="aviso-titulo">{form.titulo}</p>
-                <p className="aviso-msg">{form.mensaje}</p>
-              </div>
-
-              {errorBox}
-
-              <div className="confirm-actions">
-                <button type="button" className="md3-btn md3-btn-outlined" onClick={() => setPaso('form')} disabled={cargando}>
-                  <ArrowLeft size={18} /> Volver a editar
-                </button>
-                <button type="button" className="md3-btn md3-btn-filled md3-btn-big" onClick={enviar} disabled={cargando}>
-                  {cargando ? <Loader2 size={20} className="spin" /> : <Send size={20} />}
-                  {cargando ? 'Publicando…' : 'Sí, publicar y avisar'}
-                </button>
-              </div>
             </motion.div>
           )}
 
@@ -1060,12 +882,12 @@ export default function AvisosClimaPanel({ colonias, alertas, authFetch, onCambi
                 Ya se ve en el formulario de inscripción
                 {resultado.alerta?.suspende ? ' y la localidad figura como suspendida' : ''}.
               </p>
-              <EstadoCorreo r={resultado.emailResult} />
               <DifusionWhatsApp
                 alertaId={resultado.alerta?.id}
                 mensaje={resultado.mensajeWhatsApp}
                 links={resultado.whatsappLinks || []}
                 comunidadLink={resultado.comunidadLink ?? comunidadLink}
+                esAdmin={esAdmin}
               />
               <button type="button" className="md3-btn md3-btn-outlined clima-submit" onClick={nuevoAviso}>
                 Escribir otro aviso

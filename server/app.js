@@ -983,7 +983,8 @@ app.get('/api/comunidad', (req, res) => {
   res.json({ link: linkComunidad() });
 });
 
-app.put('/api/comunidad', authMiddleware, requireSeccion('clima'), (req, res) => {
+// Solo el administrador carga o cambia el link de la Comunidad
+app.put('/api/comunidad', authMiddleware, requireRole('admin'), (req, res) => {
   const link = String(req.body.link || '').trim();
   if (link && !LINK_COMUNIDAD_RE.test(link)) {
     return res.status(400).json({
@@ -1075,7 +1076,8 @@ app.post('/api/alertas', authMiddleware, requireSeccion('clima'), async (req, re
 
   const conEmail = familias.filter((f) => f.email);
   let emailResult = { modo: 'no_pedido', enviados: 0, fallidos: 0, sin_email: familias.length - conEmail.length, previewUrl: null };
-  if (enviar_email !== false && conEmail.length > 0) {
+  // El aviso se difunde por WhatsApp; el correo solo sale si se pide de forma explícita
+  if (enviar_email === true && conEmail.length > 0) {
     const r = await enviarEmailSuspension({
       destinatarios: conEmail,
       titulo: alerta.titulo,
@@ -1088,7 +1090,7 @@ app.post('/api/alertas', authMiddleware, requireSeccion('clima'), async (req, re
       runQuery('UPDATE alertas SET enviada_email = 1 WHERE id = ?', [alertaId]);
       saveDatabase();
     }
-  } else if (enviar_email !== false) {
+  } else if (enviar_email === true) {
     emailResult.modo = 'sin_destinatarios';
   }
 

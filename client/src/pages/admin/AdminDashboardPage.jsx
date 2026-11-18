@@ -862,6 +862,7 @@ export default function AdminDashboardPage() {
               {activeTab === 'clima' && permisos.secciones?.includes('clima') && (
                 <motion.div key="clima" {...tabMotion}>
                   <AvisosClimaPanel
+                    esAdmin={esAdmin}
                     colonias={colonias}
                     alertas={alertas}
                     authFetch={authFetch}

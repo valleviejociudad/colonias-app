@@ -95,11 +95,11 @@ function ListaBarras({ items, total }) {
   );
 }
 
-/** En PC es una tarjeta abierta; en el celular, una sección que se despliega. */
-function Seccion({ titulo, nota, isMobile, defaultOpen = false, children }) {
+/** En PC es una tarjeta abierta; en el celular, una sección plegada que el usuario despliega si quiere. */
+function Seccion({ titulo, nota, isMobile, children }) {
   if (isMobile) {
     return (
-      <details className="stats-section" open={defaultOpen || undefined}>
+      <details className="stats-section">
         <summary>
           {titulo}
           <ChevronDown size={22} aria-hidden="true" />
@@ -347,8 +347,7 @@ export default function EstadisticasPanel({
         </div>
       ) : (
         <>
-            <section className="stats-card" aria-labelledby="en-numeros">
-              <h3 id="en-numeros">En números</h3>
+            <Seccion titulo="En números" isMobile={isMobileView}>
               <dl className="facts" style={{ gridTemplateColumns: isMobileView ? undefined : 'repeat(3, minmax(0, 1fr))' }}>
                 <div>
                   <dt>Inscriptos</dt>
@@ -390,13 +389,12 @@ export default function EstadisticasPanel({
                   </dd>
                 </div>
               </dl>
-            </section>
+            </Seccion>
 
           {/* ==================== CONDICIONES DE SALUD ==================== */}
           <Seccion
             titulo="Chicos con condiciones de salud"
             isMobile={isMobileView}
-            defaultOpen
             nota={
               s.conCondicion.length === 0
                 ? undefined
