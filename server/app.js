@@ -216,7 +216,7 @@ app.post('/api/auth/login', loginLimiter, (req, res) => {
   const { queryOne } = getDb();
 
   if (!email || !password) {
-    return res.status(400).json({ error: 'Ingresá tu correo y contraseña' });
+    return res.status(400).json({ error: 'Ingresá tu correo o usuario y tu contraseña' });
   }
 
   const user = queryOne('SELECT * FROM usuarios WHERE lower(email) = lower(?)', [email.trim()]);
@@ -240,6 +240,7 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 // ==================== USUARIOS (solo admin) ====================
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USUARIO_RE = /^[a-z0-9._-]{3,40}$/;
 
 // Valida y normaliza los datos de un usuario. Devuelve { error } o { datos }.
 function validarUsuario(body, { esNuevo }) {
@@ -249,7 +250,10 @@ function validarUsuario(body, { esNuevo }) {
   const rol = body.rol === 'admin' ? 'admin' : 'coordinador';
 
   if (!nombre || nombre.length > 80) return { error: 'Escribí el nombre (hasta 80 letras).' };
-  if (!EMAIL_RE.test(email) || email.length > 120) return { error: 'Escribí un correo válido.' };
+  // El acceso puede ser un correo o un nombre de usuario (sin espacios)
+  if (email.length > 120 || !(EMAIL_RE.test(email) || USUARIO_RE.test(email))) {
+    return { error: 'Escribí un correo válido o un nombre de usuario (3 a 40 caracteres: letras, números, punto, guion o guion bajo, sin espacios).' };
+  }
   if (esNuevo && !password) return { error: 'Escribí una contraseña.' };
   if (password && (password.length < 8 || password.length > 100)) {
     return { error: 'La contraseña tiene que tener al menos 8 caracteres.' };
@@ -280,7 +284,7 @@ app.post('/api/auth/usuarios', authMiddleware, requireRole('admin'), (req, res) 
   const { queryOne, runQueryAndSave } = getDb();
 
   if (queryOne('SELECT id FROM usuarios WHERE lower(email) = lower(?)', [datos.email])) {
-    return res.status(409).json({ error: 'Ya existe un usuario con ese correo.' });
+    return res.status(409).json({ error: 'Ya existe un usuario con ese correo o usuario.' });
   }
   const result = runQueryAndSave('INSERT INTO usuarios (nombre, email, password_hash, rol, permisos) VALUES (?, ?, ?, ?, ?)', [
     datos.nombre,
@@ -311,7 +315,7 @@ app.put('/api/auth/usuarios/:id', authMiddleware, requireRole('admin'), (req, re
     }
   }
   if (queryOne('SELECT id FROM usuarios WHERE lower(email) = lower(?) AND id != ?', [datos.email, id])) {
-    return res.status(409).json({ error: 'Ya existe otro usuario con ese correo.' });
+    return res.status(409).json({ error: 'Ya existe otro usuario con ese correo o usuario.' });
   }
 
   const permisosJson = datos.permisos ? JSON.stringify(datos.permisos) : null;

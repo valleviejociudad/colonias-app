@@ -50,7 +50,7 @@ export default function LoginPage() {
         <img src={asset('logocolonias.png')} alt="Colonias de Verano" className="login-logo" />
         <h1 style={{ fontSize: '1.6rem', fontWeight: 800, textAlign: 'center' }}>Panel de coordinación</h1>
         <p style={{ textAlign: 'center', color: 'var(--ink-2)', marginTop: 6 }}>
-          Ingresá con tu correo y contraseña municipal.
+          Ingresá con tu correo o usuario y tu contraseña municipal.
         </p>
 
         <div className="lane-divider" style={{ margin: '20px 0' }} />
@@ -71,16 +71,16 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div className="md3-field">
             <label className="md3-label" htmlFor="login-email">
-              Correo electrónico
+              Correo o usuario
             </label>
             <input
               id="login-email"
               className="md3-input"
-              type="email"
-              inputMode="email"
+              type="text"
               autoCapitalize="none"
               autoCorrect="off"
-              autoComplete="email"
+              spellCheck={false}
+              autoComplete="username"
               enterKeyHint="next"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

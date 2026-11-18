@@ -255,7 +255,7 @@ export default function UsuariosPanel({ authFetch, user, isMobileView, onUnautho
           <form onSubmit={guardar} noValidate>
             <h3 style={{ fontSize: '1.3rem' }}>{form.id ? 'Editar usuario' : 'Nuevo usuario'}</h3>
             <p style={{ color: 'var(--ink-2)', margin: '4px 0 16px' }}>
-              {form.id ? 'Los cambios valen enseguida, aunque la persona ya tenga la sesión abierta.' : 'Con el correo y la contraseña entra al panel.'}
+              {form.id ? 'Los cambios valen enseguida, aunque la persona ya tenga la sesión abierta.' : 'Con el correo (o nombre de usuario) y la contraseña entra al panel.'}
             </p>
 
             <div className="md3-field">
@@ -275,14 +275,18 @@ export default function UsuariosPanel({ authFetch, user, isMobileView, onUnautho
 
             <div className="md3-field">
               <label className="md3-label" htmlFor="us-email">
-                Correo
+                Correo o nombre de usuario
               </label>
               <input
                 id="us-email"
-                type="email"
+                type="text"
                 className="md3-input"
                 maxLength={120}
                 autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="correo@ejemplo.com o laura.diaz"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
