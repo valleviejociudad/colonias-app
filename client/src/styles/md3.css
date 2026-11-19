@@ -899,16 +899,6 @@ md-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
   box-shadow: 0 -4px 16px rgba(0, 40, 60, 0.08);
   justify-content: space-around;
 }
-/* iOS (app instalada): a veces el "bottom: 0" queda por encima del borde real de la pantalla y se
-   ve el fondo celeste debajo de la barra. Se rellena hacia abajo con el mismo blanco. */
-.app-bottom-nav::after {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; top: 100%;
-  height: 200px;
-  background: #fff;
-  pointer-events: none;
-}
 .bottom-nav-item {
   flex: 1;
   display: flex;
@@ -1694,6 +1684,10 @@ md-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 900px) {
   .app-navigation-rail { display: none; }
   .app-bottom-nav { display: flex; }
+  /* iOS (app instalada): 100dvh y "bottom: 0" quedan más arriba que el borde real de la pantalla y
+     esa franja la pinta el fondo de <html> (el lienzo), no el body. En celular el lienzo va blanco,
+     igual que la barra inferior, así esa franja se ve como parte de la barra. El azulejo sigue en el body. */
+  html:has(.app-shell) { background-color: #fff; }
   .app-shell { height: 100dvh; overflow: hidden; }
   .app-main-content {
     margin-left: 0;
