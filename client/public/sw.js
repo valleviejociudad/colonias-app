@@ -1,4 +1,4 @@
-const CACHE_NAME = 'colonias-vv-v22';
+const CACHE_NAME = 'colonias-vv-v23';
 // El SW vive en /colonias/sw.js, así que su scope es /colonias/. Todo se resuelve contra el scope.
 const SCOPE = self.registration.scope;
 const STATIC_ASSETS = ['', 'index.html', 'manifest.json', 'favicon.ico', 'favicon-32.png', 'icon-192.png']

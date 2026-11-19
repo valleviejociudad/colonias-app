@@ -1683,13 +1683,14 @@ md-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
  * ========================================================================== */
 @media (max-width: 900px) {
   .app-navigation-rail { display: none; }
-  .app-bottom-nav { display: flex; }
-  /* iOS (app instalada): 100dvh y "bottom: 0" quedan más arriba que el borde real de la pantalla y
-     esa franja la pinta el fondo de <html> (el lienzo), no el body. En celular el lienzo va blanco,
-     igual que la barra inferior, así esa franja se ve como parte de la barra. El azulejo sigue en el body. */
+  .app-bottom-nav { display: flex; bottom: calc(0px - var(--ios-gap, 0px)); }
+  /* iOS (app instalada): el visor queda más bajo que la pantalla real (le falta ~el alto de la barra
+     de estado), así 100dvh y "bottom: 0" terminan antes del borde. index.html mide ese faltante en
+     --ios-gap y acá se estira la app y se baja la barra inferior esa medida. El fondo de <html>/<body>
+     va blanco por si queda alguna franja; el azulejo se dibuja en el contenido. */
   html:has(.app-shell),
-  html:has(.app-shell) body { background: #fff; }
-  .app-shell { height: 100dvh; overflow: hidden; }
+  html:has(.app-shell) body { background: #fff; overflow: hidden; }
+  .app-shell { height: calc(100dvh + var(--ios-gap, 0px)); overflow: hidden; }
   .app-main-content {
     background-color: var(--tile);
     background-image:
@@ -1698,7 +1699,7 @@ md-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
     background-size: 28px 28px;
     background-position: -1px -1px;
     margin-left: 0;
-    height: 100dvh;
+    height: calc(100dvh + var(--ios-gap, 0px));
     min-height: 0;
     overflow: hidden;
     padding-top: calc(58px + env(safe-area-inset-top, 0px));
@@ -1727,7 +1728,7 @@ md-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
     gap: 8px;
     position: fixed;
     right: 14px;
-    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px) - var(--ios-gap, 0px));
     min-height: 56px;
     padding: 0 20px;
     border-radius: var(--r-lg);

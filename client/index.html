@@ -35,6 +35,25 @@
     <link rel="icon" type="image/png" sizes="16x16" href="%BASE_URL%favicon-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <script>
+      // iOS, app instalada: el visor a veces mide menos que la pantalla (falta ~la barra de estado) y
+      // la barra inferior queda flotando. Se mide la diferencia una vez, sin teclado abierto, y el CSS
+      // la usa en --ios-gap para llegar al borde real. En Android y en Safari normal queda en 0.
+      (function () {
+        if (!navigator.standalone) return;
+        function medir() {
+          var a = document.activeElement;
+          if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+          var alto = Math.max(screen.width, screen.height);
+          if (window.innerWidth > window.innerHeight) alto = Math.min(screen.width, screen.height);
+          var gap = alto - window.innerHeight;
+          document.documentElement.style.setProperty("--ios-gap", (gap > 0 && gap < 120 ? gap : 0) + "px");
+        }
+        medir();
+        window.addEventListener("orientationchange", function () { setTimeout(medir, 300); });
+        window.addEventListener("pageshow", medir);
+      })();
+    </script>
 
     <!-- Figtree (títulos) + Atkinson Hyperlegible (texto, diseñada para máxima legibilidad) + Roboto (planilla impresa) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
