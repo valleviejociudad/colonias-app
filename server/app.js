@@ -25,7 +25,15 @@ if (!JWT_SECRET || INSECURE_SECRETS.includes(JWT_SECRET) || JWT_SECRET.length < 
   console.warn('⚠️  JWT_SECRET no definido o débil. Usá uno largo y aleatorio en .env (obligatorio en producción).');
 }
 const SIGNING_SECRET = JWT_SECRET || crypto.randomBytes(32).toString('hex');
-const TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h';
+// La sesión vence a la medianoche siguiente (hora de Argentina, UTC-3 sin horario de verano):
+// cada día hay que volver a iniciar sesión.
+const UN_DIA_MS = 24 * 60 * 60 * 1000;
+const OFFSET_AR_MS = 3 * 60 * 60 * 1000;
+function segundosHastaMedianocheAR(ahora = Date.now()) {
+  const local = ahora - OFFSET_AR_MS;
+  const medianoche = Math.floor(local / UN_DIA_MS) * UN_DIA_MS + UN_DIA_MS + OFFSET_AR_MS;
+  return Math.max(60, Math.ceil((medianoche - ahora) / 1000));
+}
 
 // Railway / proxies: necesario para que el rate limit use la IP real del cliente
 app.set('trust proxy', 1);
@@ -227,7 +235,7 @@ app.post('/api/auth/login', loginLimiter, (req, res) => {
   const token = jwt.sign(
     { id: user.id, nombre: user.nombre, email: user.email, rol: user.rol },
     SIGNING_SECRET,
-    { expiresIn: TOKEN_EXPIRES_IN }
+    { expiresIn: segundosHastaMedianocheAR() }
   );
 
   res.json({ token, user: usuarioPublico(user) });

@@ -3,6 +3,18 @@ import { API_BASE } from '../config';
 
 const AuthContext = createContext(null);
 
+// El token trae su vencimiento (exp): el servidor lo fija a la medianoche siguiente (hora de Argentina).
+function tokenVencido(token) {
+  if (!token) return true;
+  try {
+    const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const { exp } = JSON.parse(atob(b64));
+    return typeof exp === "number" && Date.now() >= exp * 1000;
+  } catch {
+    return true;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
@@ -12,7 +24,33 @@ export function AuthProvider({ children }) {
       return null;
     }
   });
-  const [token, setToken] = useState(() => localStorage.getItem('vv_colonias_token') || null);
+  const [token, setToken] = useState(() => {
+    const t = localStorage.getItem('vv_colonias_token');
+    return t && !tokenVencido(t) ? t : null;
+  });
+  const [, setReloj] = useState(0);
+
+  // Se revisa en cada render (p. ej. al pasar del formulario de inscripción al panel), cada minuto
+  // y al volver a la app: pasada la medianoche la sesión se cierra y se pide el login de nuevo.
+  const vencido = Boolean(token) && tokenVencido(token);
+  useEffect(() => {
+    if (vencido) {
+      setToken(null);
+      setUser(null);
+    }
+  }, [vencido]);
+  useEffect(() => {
+    if (!token) return undefined;
+    const tic = () => setReloj((n) => n + 1);
+    const id = setInterval(tic, 60 * 1000);
+    window.addEventListener("focus", tic);
+    document.addEventListener("visibilitychange", tic);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", tic);
+      document.removeEventListener("visibilitychange", tic);
+    };
+  }, [token]);
 
   useEffect(() => {
     if (token) {
@@ -100,7 +138,7 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, authFetch }}>
+    <AuthContext.Provider value={{ user: vencido ? null : user, token: vencido ? null : token, login, logout, authFetch }}>
       {children}
     </AuthContext.Provider>
   );
