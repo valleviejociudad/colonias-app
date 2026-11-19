@@ -1687,9 +1687,16 @@ md-chip-set { display: flex; flex-wrap: wrap; gap: 8px; }
   /* iOS (app instalada): 100dvh y "bottom: 0" quedan más arriba que el borde real de la pantalla y
      esa franja la pinta el fondo de <html> (el lienzo), no el body. En celular el lienzo va blanco,
      igual que la barra inferior, así esa franja se ve como parte de la barra. El azulejo sigue en el body. */
-  html:has(.app-shell) { background-color: #fff; }
+  html:has(.app-shell),
+  html:has(.app-shell) body { background: #fff; }
   .app-shell { height: 100dvh; overflow: hidden; }
   .app-main-content {
+    background-color: var(--tile);
+    background-image:
+      linear-gradient(var(--grout) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grout) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
     margin-left: 0;
     height: 100dvh;
     min-height: 0;
